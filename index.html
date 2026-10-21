@@ -144,8 +144,10 @@ button{cursor:pointer}
 
 /* Viewer */
 .view{background:var(--sunk)}
-.view-stage{flex:1;min-height:0;display:grid;place-items:center;padding:8px}
-.view-stage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px}
+.view-stage{flex:1;min-height:0;display:grid;place-items:center;padding:8px;overflow:hidden;touch-action:none;position:relative}
+.view-stage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;transform-origin:50% 50%;will-change:transform;-webkit-user-drag:none;user-select:none}
+.view-stage img.zoom-anim{transition:transform .22s ease-out}
+.zoom-badge{position:absolute;top:10px;right:max(12px, env(safe-area-inset-right, 0px));font-family:var(--f-mono);font-size:11.5px;padding:4px 10px;border-radius:999px;background:var(--surface);color:var(--fg);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);pointer-events:none;font-variant-numeric:tabular-nums}
 .view-stage img.reveal{animation:clear .6s ease-out}
 .view-meta{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);letter-spacing:.04em}
 .view-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding-block:10px;flex:none;border-top:1px solid var(--line)}
@@ -246,7 +248,7 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
       <button class="text-btn" id="view-back">← 戻る</button>
       <div class="view-meta" id="view-meta"></div>
     </header>
-    <div class="view-stage"><img id="view-img" alt=""></div>
+    <div class="view-stage" id="view-stage"><img id="view-img" alt="" draggable="false"><span class="zoom-badge" id="zoom-badge" hidden></span></div>
     <div class="view-actions gut">
       <button class="va" id="va-move"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M10 13h6M13 10l3 3-3 3"/></svg>移動</button>
       <button class="va" id="va-collage"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="2"/><rect x="9" y="9" width="12" height="12" rx="2"/></svg>土台にする</button>
@@ -710,12 +712,53 @@ async function getBlob(id){
 /* ---------- Viewer ---------- */
 async function openViewer(id){
   const it = S.index.items.find(i=>i.id===id); if(!it) return;
-  S.viewId = id; show('scr-view');
+  S.viewId = id; Z.reset(); show('scr-view');
   const img = $('#view-img'); img.src = it.thumb;
   $('#view-meta').textContent = new Date(it.t).toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) + ` · ${it.w}×${it.h}`;
   try { const u = URL.createObjectURL(await getBlob(id)); S.urls.push(u); if(S.viewId===id){ img.classList.remove('reveal'); void img.offsetWidth; img.src = u; img.classList.add('reveal'); } } catch { toast('写真を開けませんでした'); }
 }
-$('#view-back').onclick = () => { S.viewId=null; show('scr-home'); renderHome(); };
+/* ---------- Viewer zoom (pinch, double-tap, drag) ---------- */
+const Z = (() => {
+  const st=$('#view-stage'), img=$('#view-img'), badge=$('#zoom-badge'), P=new Map();
+  let z=1, tx=0, ty=0, g=null, lastTap=null, badgeT;
+  const MAX=6;
+  const center = () => { const r=st.getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2, w:r.width, h:r.height}; };
+  const clampT = () => {
+    const c=center(), iw=img.clientWidth*z, ih=img.clientHeight*z;
+    const mx=Math.max(0,(iw-c.w)/2+8), my=Math.max(0,(ih-c.h)/2+8);
+    tx=clamp(tx,-mx,mx); ty=clamp(ty,-my,my);
+  };
+  const apply = anim => {
+    img.classList.toggle('zoom-anim', !!anim);
+    img.style.transform = z===1 && !tx && !ty ? '' : `translate(${tx}px,${ty}px) scale(${z})`;
+    if(z>1.01){ badge.hidden=false; badge.textContent=`${Math.round(z*100)}%`; clearTimeout(badgeT); badgeT=setTimeout(()=>{badge.hidden=true;},1200); } else badge.hidden=true;
+  };
+  const zoomAt = (nz, p, from) => { const c=center(); const f=from||{z,tx,ty}; const qx=(p.x-c.x-f.tx)/f.z, qy=(p.y-c.y-f.ty)/f.z; z=clamp(nz,1,MAX); tx=p.x-c.x-qx*z; ty=p.y-c.y-qy*z; if(z===1){tx=0;ty=0;} clampT(); };
+  const dist=(a,b)=>Math.hypot(b.x-a.x,b.y-a.y), mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+  const start = () => { const p=[...P.values()];
+    if(p.length>=2) g={n:2, d0:dist(p[0],p[1])||1, m0:mid(p[0],p[1]), z, tx, ty};
+    else if(p.length===1) g={n:1, p0:p[0], tx, ty, moved:false};
+    else g=null; };
+  st.addEventListener('pointerdown', e => { if(e.target!==img && e.target!==st) return; st.setPointerCapture(e.pointerId); P.set(e.pointerId,{x:e.clientX,y:e.clientY}); start(); });
+  st.addEventListener('pointermove', e => {
+    if(!P.has(e.pointerId)||!g) return; P.set(e.pointerId,{x:e.clientX,y:e.clientY}); const p=[...P.values()];
+    if(g.n===2 && p.length>=2){ const m=mid(p[0],p[1]); zoomAt(g.z*dist(p[0],p[1])/g.d0, g.m0, g); tx+=m.x-g.m0.x; ty+=m.y-g.m0.y; clampT(); apply(false); }
+    else if(g.n===1 && p.length===1){ const dx=p[0].x-g.p0.x, dy=p[0].y-g.p0.y; if(Math.hypot(dx,dy)>6) g.moved=true; if(z>1){ tx=g.tx+dx; ty=g.ty+dy; clampT(); apply(false); } }
+  });
+  const end = e => {
+    if(!P.has(e.pointerId)) return; const wasTap = g && g.n===1 && !g.moved && P.size===1; const pt={x:e.clientX,y:e.clientY};
+    P.delete(e.pointerId); start();
+    if(z<1.02 && P.size===0){ z=1; tx=0; ty=0; apply(true); }
+    if(wasTap){ const now=Date.now();
+      if(lastTap && now-lastTap.t<320 && dist(lastTap.p,pt)<30){ if(z>1){ z=1; tx=0; ty=0; } else zoomAt(2.5, pt); apply(true); lastTap=null; }
+      else lastTap={t:now,p:pt}; }
+  };
+  st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
+  st.addEventListener('wheel', e => { e.preventDefault(); zoomAt(z*Math.exp(-e.deltaY*0.002), {x:e.clientX,y:e.clientY}); apply(false); }, {passive:false});
+  window.addEventListener('resize', () => { if(z>1){ clampT(); apply(false); } });
+  return { reset(){ z=1; tx=0; ty=0; P.clear(); g=null; lastTap=null; apply(false); } };
+})();
+$('#view-back').onclick = () => { Z.reset(); S.viewId=null; show('scr-home'); renderHome(); };
 $('#va-move').onclick = async () => {
   const it = S.index.items.find(i=>i.id===S.viewId); if(!it) return;
   const opts = [{label:'未分類', value:'none'}, ...S.index.folders.map(f=>({label:f.name, value:f.id})), {label:'＋ 新しいフォルダを作って移動', value:'new'}];
