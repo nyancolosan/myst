@@ -145,8 +145,9 @@ button{cursor:pointer}
 /* Viewer */
 .view{background:var(--sunk)}
 .view-stage{flex:1;min-height:0;display:grid;place-items:center;padding:8px;overflow:hidden;touch-action:none;position:relative}
-.view-stage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;transform-origin:50% 50%;will-change:transform;-webkit-user-drag:none;user-select:none}
+.view-stage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;transform-origin:50% 50%;-webkit-user-drag:none;user-select:none}
 .view-stage img.zoom-anim{transition:transform .22s ease-out}
+.view-stage img.sized{position:absolute;max-width:none;max-height:none;transform:none}
 .zoom-badge{position:absolute;top:10px;right:max(12px, env(safe-area-inset-right, 0px));font-family:var(--f-mono);font-size:11.5px;padding:4px 10px;border-radius:999px;background:var(--surface);color:var(--fg);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);pointer-events:none;font-variant-numeric:tabular-nums}
 .view-stage img.reveal{animation:clear .6s ease-out}
 .view-meta{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);letter-spacing:.04em}
@@ -548,7 +549,7 @@ async function enter(r){
   S.dek = await importDek(unb64(r.data.dek));
   S.index = await loadIndex();
   S.folder = 'all'; S.fog = fogPref();
-  Fog.stop(); show('scr-home'); renderHome();
+  Fog.stop(); show('scr-home'); renderHome(); upgradeThumbs();
   const h=$('#scr-home'); h.classList.remove('clearing'); void h.offsetWidth; h.classList.add('clearing');
 }
 function lock(){
@@ -660,15 +661,25 @@ function canvasFrom(src, max){
   const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w*k)); c.height = Math.max(1, Math.round(h*k));
   c.getContext('2d').drawImage(src, 0, 0, c.width, c.height); return c;
 }
+async function upgradeThumbs(){
+  const vault = S.vault; let n = 0;
+  for(const it of S.index ? S.index.items.filter(i=>(i.tv||1)<2) : []){
+    if(!S.dek || S.vault!==vault) return;
+    try { const bmp = await createImageBitmap(await getBlob(it.id)); it.thumb = thumbOf(bmp); it.tv = 2; bmp.close && bmp.close(); n++; } catch {}
+    if(n && n%6===0 && S.vault===vault){ await saveIndex(); renderHome(); }
+    await new Promise(r=>setTimeout(r,30));
+  }
+  if(n && S.dek && S.vault===vault){ await saveIndex(); renderHome(); }
+}
 function thumbOf(src){
-  const N=300, c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
+  const N=420, c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
   const s=Math.max(N/src.width, N/src.height); const w=src.width*s, h=src.height*s;
-  x.drawImage(src, (N-w)/2, (N-h)/2, w, h); return c.toDataURL('image/jpeg', .72);
+  x.drawImage(src, (N-w)/2, (N-h)/2, w, h); return c.toDataURL('image/jpeg', .82);
 }
 async function storeImage(buf, type, drawable, folder){
   const id = uid(); const {iv, ct} = await seal(S.dek, buf);
   await idb.put('blobs', {id, vault:S.vault, iv, ct});
-  S.index.items.push({id, folder: (folder==='all'||folder==='none') ? null : folder, t:Date.now(), w:drawable.width, h:drawable.height, type, thumb:thumbOf(drawable)});
+  S.index.items.push({id, folder: (folder==='all'||folder==='none') ? null : folder, t:Date.now(), w:drawable.width, h:drawable.height, type, thumb:thumbOf(drawable), tv:2});
   return id;
 }
 $('#btn-import').onclick = () => pickFiles(true, files => importFiles(files, true));
@@ -717,22 +728,23 @@ async function openViewer(id){
   $('#view-meta').textContent = new Date(it.t).toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) + ` · ${it.w}×${it.h}`;
   try { const u = URL.createObjectURL(await getBlob(id)); S.urls.push(u); if(S.viewId===id){ img.classList.remove('reveal'); void img.offsetWidth; img.src = u; img.classList.add('reveal'); } } catch { toast('写真を開けませんでした'); }
 }
-/* ---------- Viewer zoom (pinch, double-tap, drag) ---------- */
+/* ---------- Viewer zoom (pinch, double-tap, drag). Gestures use a fast transform; when fingers lift, the photo is laid out at its real zoomed size so it renders sharp. ---------- */
 const Z = (() => {
   const st=$('#view-stage'), img=$('#view-img'), badge=$('#zoom-badge'), P=new Map();
-  let z=1, tx=0, ty=0, g=null, lastTap=null, badgeT;
-  const MAX=6;
+  let z=1, tx=0, ty=0, g=null, lastTap=null, badgeT, settleT;
+  const MAX=8;
+  const base = () => { const nw=img.naturalWidth||1, nh=img.naturalHeight||1, W=st.clientWidth-16, H=st.clientHeight-16; const f=Math.min(W/nw, H/nh, 1); return {w:nw*f, h:nh*f}; };
   const center = () => { const r=st.getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2, w:r.width, h:r.height}; };
-  const clampT = () => {
-    const c=center(), iw=img.clientWidth*z, ih=img.clientHeight*z;
-    const mx=Math.max(0,(iw-c.w)/2+8), my=Math.max(0,(ih-c.h)/2+8);
-    tx=clamp(tx,-mx,mx); ty=clamp(ty,-my,my);
-  };
-  const apply = anim => {
-    img.classList.toggle('zoom-anim', !!anim);
-    img.style.transform = z===1 && !tx && !ty ? '' : `translate(${tx}px,${ty}px) scale(${z})`;
+  const clampT = () => { const c=center(), b=base(), iw=b.w*z, ih=b.h*z; const mx=Math.max(0,(iw-c.w)/2+8), my=Math.max(0,(ih-c.h)/2+8); tx=clamp(tx,-mx,mx); ty=clamp(ty,-my,my); };
+  const unsize = () => { img.classList.remove('sized'); img.style.width=img.style.height=img.style.left=img.style.top=''; };
+  const apply = (anim, crisp) => {
+    clearTimeout(settleT);
+    if(crisp && z>1.01){ const b=base(), w=b.w*z, h=b.h*z; img.classList.remove('zoom-anim'); img.classList.add('sized');
+      img.style.width=w+'px'; img.style.height=h+'px'; img.style.left=((st.clientWidth-w)/2+tx)+'px'; img.style.top=((st.clientHeight-h)/2+ty)+'px'; img.style.transform=''; }
+    else { unsize(); img.classList.toggle('zoom-anim', !!anim); img.style.transform = z===1 && !tx && !ty ? '' : `translate(${tx}px,${ty}px) scale(${z})`; }
     if(z>1.01){ badge.hidden=false; badge.textContent=`${Math.round(z*100)}%`; clearTimeout(badgeT); badgeT=setTimeout(()=>{badge.hidden=true;},1200); } else badge.hidden=true;
   };
+  const settle = delay => { clearTimeout(settleT); settleT=setTimeout(()=>{ if(!P.size) apply(false, true); }, delay); };
   const zoomAt = (nz, p, from) => { const c=center(); const f=from||{z,tx,ty}; const qx=(p.x-c.x-f.tx)/f.z, qy=(p.y-c.y-f.ty)/f.z; z=clamp(nz,1,MAX); tx=p.x-c.x-qx*z; ty=p.y-c.y-qy*z; if(z===1){tx=0;ty=0;} clampT(); };
   const dist=(a,b)=>Math.hypot(b.x-a.x,b.y-a.y), mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
   const start = () => { const p=[...P.values()];
@@ -743,19 +755,22 @@ const Z = (() => {
   st.addEventListener('pointermove', e => {
     if(!P.has(e.pointerId)||!g) return; P.set(e.pointerId,{x:e.clientX,y:e.clientY}); const p=[...P.values()];
     if(g.n===2 && p.length>=2){ const m=mid(p[0],p[1]); zoomAt(g.z*dist(p[0],p[1])/g.d0, g.m0, g); tx+=m.x-g.m0.x; ty+=m.y-g.m0.y; clampT(); apply(false); }
-    else if(g.n===1 && p.length===1){ const dx=p[0].x-g.p0.x, dy=p[0].y-g.p0.y; if(Math.hypot(dx,dy)>6) g.moved=true; if(z>1){ tx=g.tx+dx; ty=g.ty+dy; clampT(); apply(false); } }
+    else if(g.n===1 && p.length===1){ const dx=p[0].x-g.p0.x, dy=p[0].y-g.p0.y; if(Math.hypot(dx,dy)>6) g.moved=true; if(z>1 && g.moved){ tx=g.tx+dx; ty=g.ty+dy; clampT(); apply(false, true); } }
   });
   const end = e => {
     if(!P.has(e.pointerId)) return; const wasTap = g && g.n===1 && !g.moved && P.size===1; const pt={x:e.clientX,y:e.clientY};
     P.delete(e.pointerId); start();
-    if(z<1.02 && P.size===0){ z=1; tx=0; ty=0; apply(true); }
+    if(P.size) return;
+    if(z<1.02){ z=1; tx=0; ty=0; apply(true); }
     if(wasTap){ const now=Date.now();
-      if(lastTap && now-lastTap.t<320 && dist(lastTap.p,pt)<30){ if(z>1){ z=1; tx=0; ty=0; } else zoomAt(2.5, pt); apply(true); lastTap=null; }
-      else lastTap={t:now,p:pt}; }
+      if(lastTap && now-lastTap.t<320 && dist(lastTap.p,pt)<30){ if(z>1){ z=1; tx=0; ty=0; } else zoomAt(2.5, pt); apply(true); lastTap=null; settle(260); return; }
+      lastTap={t:now,p:pt}; }
+    settle(60);
   };
   st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
-  st.addEventListener('wheel', e => { e.preventDefault(); zoomAt(z*Math.exp(-e.deltaY*0.002), {x:e.clientX,y:e.clientY}); apply(false); }, {passive:false});
-  window.addEventListener('resize', () => { if(z>1){ clampT(); apply(false); } });
+  st.addEventListener('wheel', e => { e.preventDefault(); zoomAt(z*Math.exp(-e.deltaY*0.002), {x:e.clientX,y:e.clientY}); apply(false); settle(200); }, {passive:false});
+  img.addEventListener('load', () => { if(z>1){ clampT(); apply(false, true); } });
+  window.addEventListener('resize', () => { if(z>1){ clampT(); apply(false, true); } });
   return { reset(){ z=1; tx=0; ty=0; P.clear(); g=null; lastTap=null; apply(false); } };
 })();
 $('#view-back').onclick = () => { Z.reset(); S.viewId=null; show('scr-home'); renderHome(); };
@@ -806,9 +821,9 @@ const E = {
   base:null, layers:[], active:-1, k:1, ox:0, oy:0,
   reset(){ this.base=null; this.layers=[]; this.active=-1; },
   open(){ this.reset(); show('scr-edit'); this.refresh(); requestAnimationFrame(()=>this.layout()); },
-  setBase(bmp){ this.base = canvasFrom(bmp, 3000); bmp.close && bmp.close(); this.refresh(); this.layout(); },
+  setBase(bmp){ this.base = canvasFrom(bmp, 4032); bmp.close && bmp.close(); this.refresh(); this.layout(); },
   addLayer(bmp){
-    const src = canvasFrom(bmp, 1400); bmp.close && bmp.close();
+    const src = canvasFrom(bmp, 2400); bmp.close && bmp.close();
     const orig = document.createElement('canvas'); orig.width=src.width; orig.height=src.height; orig.getContext('2d').drawImage(src,0,0);
     const s = 0.5 * this.base.width / src.width;
     this.layers.push({type:'img', src, orig, x:this.base.width/2, y:this.base.height/2, s, r:0, o:1});
@@ -953,7 +968,7 @@ $('#ed-save').onclick = async () => {
   try {
     const out=document.createElement('canvas'); out.width=E.base.width; out.height=E.base.height;
     E.composite(out.getContext('2d'));
-    const blob = await new Promise(r=>out.toBlob(r,'image/jpeg',.92));
+    const blob = await new Promise(r=>out.toBlob(r,'image/jpeg',.96));
     await storeImage(await blob.arrayBuffer(), 'image/jpeg', out, S.folder); await saveIndex();
     E.reset(); show('scr-home'); renderHome(); toast('コラージュを保存しました');
   } catch { toast('保存できませんでした'); }
