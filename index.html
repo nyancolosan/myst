@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#0c0f13" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#e5e9ed" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b2440" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e2eaf7" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -58,7 +58,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15
 button,input,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#app{position:fixed;top:0;left:0;right:0;height:100%;height:100lvh;overflow:hidden}
+#app{position:fixed;inset:0;overflow:hidden}
 .scr{position:absolute;inset:0;display:flex;flex-direction:column;background:radial-gradient(90% 45% at 10% 0%, rgba(var(--mist-rgb),.28), transparent 70%),radial-gradient(70% 50% at 100% 100%, rgba(var(--mist-rgb),.24), transparent 70%),linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%)}
 .gut{padding-left:var(--gut-l);padding-right:var(--gut-r)}
 .frost{background:var(--surface);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2)}
@@ -1267,12 +1267,6 @@ function importBackup(){
 </script>
 
 <script>
-(function(){ // iOS home-screen apps report a height short by the status bar; size to the full screen instead
-  if(!navigator.standalone) return;
-  const app=document.getElementById('app');
-  const fit=()=>{ const portrait=innerHeight>=innerWidth; const full=portrait?Math.max(screen.height,screen.width):Math.min(screen.height,screen.width); app.style.height=Math.max(innerHeight, full)+'px'; };
-  fit(); addEventListener('resize',fit); addEventListener('orientationchange',()=>setTimeout(fit,300));
-})();
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
 </script>
