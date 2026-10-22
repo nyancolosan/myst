@@ -12,8 +12,8 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="no-referrer">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=3">
-<link rel="icon" type="image/png" href="icon-192.png?v=3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=4">
+<link rel="icon" type="image/png" href="icon-192.png?v=4">
 <style>
 :root{color-scheme:light;height:100%}
 html{background:#111727}
@@ -53,19 +53,19 @@ img{max-width:100%}
   --chk1:#253050; --chk2:#1a2238; --scrim:rgba(5,8,18,.55); --mist-rgb:120,150,215; --wisp-rgb:200,215,245;
   --shadow:0 10px 30px rgba(0,0,0,.35); --art-op:.22; color-scheme:dark }
 html,body{height:100%;overscroll-behavior:none}
-html{background:var(--bg)}
+html,body{background:var(--bg2)}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6;-webkit-tap-highlight-color:transparent;overflow:hidden}
 button,input,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#app{position:relative;height:100%;overflow:hidden}
+#app{position:fixed;top:0;left:0;right:0;height:100%;height:100lvh;overflow:hidden}
 .scr{position:absolute;inset:0;display:flex;flex-direction:column;background:radial-gradient(90% 45% at 10% 0%, rgba(var(--mist-rgb),.28), transparent 70%),radial-gradient(70% 50% at 100% 100%, rgba(var(--mist-rgb),.24), transparent 70%),linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%)}
 .gut{padding-left:var(--gut-l);padding-right:var(--gut-r)}
 .frost{background:var(--surface);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2)}
 
 /* Lock: fog canvas behind a quiet wordmark */
 .lock{align-items:center;justify-content:center;overflow-y:auto;isolation:isolate}
-.lock::before{content:"";position:absolute;inset:-18%;background:url("icon-512.png?v=3") center/cover no-repeat;filter:blur(4px) saturate(1.1);opacity:var(--art-op);z-index:-1;animation:drift 38s ease-in-out infinite alternate}
+.lock::before{content:"";position:absolute;inset:-18%;background:url("fog-art.jpg") center/cover no-repeat;filter:blur(4px) saturate(1.1);opacity:var(--art-op);z-index:-1;animation:drift 38s ease-in-out infinite alternate}
 @keyframes drift{from{transform:scale(1.05) rotate(-3deg) translate(-2%,1%)}to{transform:scale(1.18) rotate(4deg) translate(3%,-2%)}}
 .fog-cv{position:absolute;inset:0;width:100%;height:100%;filter:blur(14px);pointer-events:none;z-index:-1}
 .lock-inner{position:relative;width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:12px;padding-block:calc(24px + env(safe-area-inset-top,0px)) calc(24px + env(safe-area-inset-bottom,0px))}
@@ -1267,6 +1267,12 @@ function importBackup(){
 </script>
 
 <script>
+(function(){ // iOS home-screen apps report a height short by the status bar; size to the full screen instead
+  if(!navigator.standalone) return;
+  const app=document.getElementById('app');
+  const fit=()=>{ const portrait=innerHeight>=innerWidth; const full=portrait?Math.max(screen.height,screen.width):Math.min(screen.height,screen.width); app.style.height=Math.max(innerHeight, full)+'px'; };
+  fit(); addEventListener('resize',fit); addEventListener('orientationchange',()=>setTimeout(fit,300));
+})();
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
 </script>
