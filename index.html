@@ -744,13 +744,21 @@ $('#grid').addEventListener('click', async e => {
 $('#grid').addEventListener('click', e => { const b=e.target.closest('.th'); if(b) openViewer(b.dataset.id); });
 
 /* ---------- Files ---------- */
+function showError(title, err){ busy(false); S.importing=false; confirmSheet(title, `原因：${(err&&err.name)||'Error'}: ${(err&&err.message)||String(err)}（この文をそのままClaudeに伝えてください）`, 'わかった'); }
+const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
 function pickFiles(multiple, cb, input='#file', accept='image/*'){
   const f = $(input); f.multiple = multiple; f.value=''; S.picking = true;
   if(input==='#file') f.accept = accept;
+  let handled = false;
   const done = () => { setTimeout(()=>{ S.picking=false; }, 800); };
-  f.onchange = () => { done(); cb([...f.files]); };
+  const take = () => { if(handled || !f.files || !f.files.length) return; handled = true; done(); const list=[...f.files];
+    Promise.resolve().then(()=>cb(list)).catch(err => showError('取り込みを始められませんでした', err)); };
+  f.onchange = take; f.oninput = take;
   f.oncancel = done;
-  window.addEventListener('focus', function h(){ window.removeEventListener('focus', h); setTimeout(()=>{ if(!f.files.length) S.picking=false; }, 1500); });
+  // some iOS versions return from the picker without firing change: check the input ourselves
+  const poll = setInterval(() => { if(handled){ clearInterval(poll); return; } if(f.files && f.files.length && !document.hidden){ take(); clearInterval(poll); } }, 700);
+  setTimeout(()=>clearInterval(poll), 10*60*1000);
+  window.addEventListener('focus', function h(){ window.removeEventListener('focus', h); setTimeout(()=>{ if(!f.files.length && !handled) S.picking=false; }, 1500); });
   f.click();
 }
 const dimsOf = src => ({w: src.videoWidth||src.naturalWidth||src.width||0, h: src.videoHeight||src.naturalHeight||src.height||0});
@@ -848,16 +856,22 @@ function deleteReminder(n){
 let saveChain = Promise.resolve();
 const queueSave = () => (saveChain = saveChain.then(saveIndex).catch(()=>{}));
 async function importFiles(files, fromLibrary){
-  if(!files.length || !S.dek || !S.folder) return;
+  if(!files.length) return;
+  if(!S.dek){ toast('ロックされたため保存できませんでした。開き直してもう一度選んでください'); return; }
+  if(!S.folder){ toast('フォルダを開いてから追加してください'); return; }
+  busy(true, `${files.length}件を受け取りました…`);
+  try { await importFilesInner(files, fromLibrary); } catch(err){ showError('保存中にエラーが起きました', err); }
+}
+async function importFilesInner(files, fromLibrary){
   const folder = S.folder, total = files.length, base = Date.now();
   const isVid = f => (f.type||'').startsWith('video/') || /\.(mov|mp4|m4v|webm)$/i.test(f.name||'');
   // storage check before a big batch
-  try { const est = await navigator.storage.estimate(); const need = files.reduce((a,f)=>a+f.size,0)*1.05;
-    if(est.quota && est.quota-est.usage < need && !await confirmSheet('空き容量が足りないかもしれません', `必要な目安 ${fmtSize(need)}／使える残り ${fmtSize(est.quota-est.usage)}。入りきらなかった時点で止めます。`, '続ける')) return;
+  try { const est = await withTimeout(navigator.storage.estimate(), 1500); if(!est) throw 0; const need = files.reduce((a,f)=>a+f.size,0)*1.05;
+    if(est.quota && est.quota-est.usage < need){ busy(false); if(!await confirmSheet('空き容量が足りないかもしれません', `必要な目安 ${fmtSize(need)}／使える残り ${fmtSize(est.quota-est.usage)}。入りきらなかった時点で止めます。`, '続ける')) return; }
   } catch {}
   let ok=0, ng=0, done=0, stop=false, quota=false, unsaved=0, vidPct=null, wake=null;
   S.importing = true;
-  try { wake = await navigator.wakeLock.request('screen'); } catch {}
+  try { wake = await withTimeout(navigator.wakeLock.request('screen'), 800); } catch {}
   const paint = () => busy(true, `保管中… ${done} / ${total}${vidPct!=null?`（動画 ${vidPct}%）`:''}`, {progress: done/total, onCancel: () => { stop = true; busy(true, '中止しています…', {progress: done/total}); }});
   paint();
   let why = '';
@@ -871,7 +885,7 @@ async function importFiles(files, fromLibrary){
       let bmp = null; try { bmp = await decodeImage(new Blob([buf], {type})); } catch {}   // keep the photo even if a preview can't be made
       await storeImage(buf, type, bmp, folder, base + i); bmp.close && bmp.close(); ok++; } catch(err){ fail(err); }
     after(); } };
-  await Promise.all([worker(), worker(), worker()]);
+  await Promise.all([worker(), worker()]);
   // videos: one at a time (they are large)
   for(const {f,i} of videos){ if(stop) break;
     try { vidPct = 0; paint(); const info = await videoInfo(f); if(!info) throw new Error('video'); info.t = base + i;
