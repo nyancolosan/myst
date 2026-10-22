@@ -226,7 +226,11 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
 #veil::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(17,23,39,.35),rgba(27,36,64,.55))}
 #veil b{position:relative;z-index:1;font-family:var(--f-display);font-weight:400;font-size:34px;letter-spacing:.55em;margin-right:-.55em;color:#fff;text-shadow:0 0 24px rgba(150,176,224,.9)}
 .toast{position:absolute;left:50%;width:max-content;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--accent);color:var(--accent-fg);box-shadow:var(--shadow);padding:10px 18px;border-radius:999px;font-size:13.5px;z-index:40;max-width:calc(100% - 32px);text-align:center}
-.busy{position:absolute;inset:0;background:var(--scrim);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:grid;place-items:center;z-index:30;color:#fff;font-size:14px;letter-spacing:.06em}
+.busy{position:absolute;inset:0;background:var(--scrim);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:30;color:#fff;font-size:14px;letter-spacing:.06em;padding:24px;text-align:center}
+.busy-bar{width:min(260px,70vw);height:6px;border-radius:999px;background:rgba(255,255,255,.2);overflow:hidden}
+.busy-bar i{display:block;height:100%;width:0;background:#fff;border-radius:inherit;transition:width .2s}
+.busy-cancel{border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:999px;padding:8px 20px;min-height:40px;font-size:13.5px}
+#veil small{position:absolute;bottom:calc(40px + env(safe-area-inset-bottom,0px));z-index:1;color:#fff;font-size:13px;letter-spacing:.06em;opacity:.85}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -359,8 +363,8 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
   </section>
 
   <div id="sheet-wrap" class="sheet-wrap" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
-  <div id="veil" aria-hidden="true" hidden><b>MYST</b></div>
-  <div id="busy" class="busy" hidden>処理中…</div>
+  <div id="veil" aria-hidden="true" hidden><b>MYST</b><small id="veil-note" hidden>取り込みを続けています。終わるとロックします</small></div>
+  <div id="busy" class="busy" hidden><span id="busy-text">処理中…</span><div class="busy-bar" id="busy-bar" hidden><i></i></div><button class="busy-cancel" id="busy-cancel" hidden>中止</button></div>
   <div id="toast" class="toast" role="status" hidden></div>
   <input type="file" id="file" accept="image/*" hidden>
   <input type="file" id="file-backup" accept="application/json,.json" hidden>
@@ -451,7 +455,11 @@ const screens = ['scr-lock','scr-home','scr-view','scr-edit','scr-cut'];
 function show(id){ screens.forEach(s => { $('#'+s).hidden = s !== id; }); }
 let toastT;
 function toast(t){ const el=$('#toast'); el.textContent=t; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{el.hidden=true;},2400); }
-const busy = (on, text) => { const b=$('#busy'); b.textContent = text || '処理中…'; b.hidden = !on; };
+const busy = (on, text, opts={}) => {
+  $('#busy-text').textContent = text || '処理中…'; $('#busy').hidden = !on;
+  const bar=$('#busy-bar'); bar.hidden = opts.progress==null; if(opts.progress!=null) bar.firstChild.style.width = Math.round(opts.progress*100)+'%';
+  const c=$('#busy-cancel'); c.hidden = !opts.onCancel; c.onclick = opts.onCancel || null;
+};
 
 let sheetDismiss = null;
 function sheet(build, onDismiss){
@@ -586,7 +594,7 @@ async function enter(r){
   const h=$('#scr-home'); h.classList.remove('clearing'); void h.offsetWidth; h.classList.add('clearing');
 }
 function lock(){
-  closeSheetSilently();
+  closeSheetSilently(); $('#veil-note').hidden = true; setTimeout(()=>{ if(!document.hidden) veil.hidden = true; }, 50);
   S.dek=null; S.index=null; S.vault=null; S.role=null; S.entryId=null; S.viewId=null;
   S.urls.forEach(u=>URL.revokeObjectURL(u)); S.urls=[];
   $('#grid').innerHTML=''; $('#view-img').removeAttribute('src'); stopVideo();
@@ -626,14 +634,14 @@ const Fog = {
 /* Privacy veil: cover the screen the instant the app loses focus, so the app switcher snapshot shows only fog. */
 const veil = $('#veil');
 const cover = () => { if(S.picking) return; veil.hidden = false; };
-const uncover = () => { if(!document.hidden) veil.hidden = true; };
+const uncover = () => { if(!document.hidden && !S.lockPending) veil.hidden = true; };
 window.addEventListener('blur', cover);
 window.addEventListener('pagehide', cover);
 document.addEventListener('freeze', cover);
 window.addEventListener('focus', uncover);
 window.addEventListener('pageshow', uncover);
 document.addEventListener('visibilitychange', () => {
-  if(document.hidden){ cover(); if(S.dek && !S.picking) lock(); }
+  if(document.hidden){ cover(); if(S.dek && !S.picking){ if(S.importing){ S.lockPending = true; $('#veil-note').hidden = false; } else lock(); } }
   else setTimeout(uncover, 50);
 });
 $('#btn-lock').onclick = lock;
@@ -755,10 +763,10 @@ function thumbOf(src){
   const s=Math.max(N/sw, N/sh); const w=sw*s, h=sh*s;
   x.drawImage(src, (N-w)/2, (N-h)/2, w, h); return c.toDataURL('image/jpeg', .82);
 }
-async function storeImage(buf, type, drawable, folder){
+async function storeImage(buf, type, drawable, folder, t){
   const id = uid(); const {iv, ct} = await seal(S.dek, buf);
   await idb.put('blobs', {id, vault:S.vault, iv, ct});
-  S.index.items.push({id, folder, t:Date.now(), w:drawable.width, h:drawable.height, type, thumb:thumbOf(drawable), tv:2});
+  S.index.items.push({id, folder, t:t||Date.now(), w:drawable.width, h:drawable.height, type, thumb:thumbOf(drawable), tv:2});
   return id;
 }
 const CHUNK = 8*1024*1024;
@@ -793,7 +801,7 @@ async function storeVideo(file, info, folder, onProgress){
       onProgress && onProgress((k+1)/n);
     }
   } catch(err){ for(let k=0;k<n;k++){ try { await idb.del('blobs', `${id}:${k}`); } catch {} } throw err; }
-  S.index.items.push({id, kind:'video', chunks:n, size:file.size, folder, t:Date.now(), w:info.w, h:info.h, dur:info.dur, type:file.type||'video/mp4', thumb:info.thumb, tv:2});
+  S.index.items.push({id, kind:'video', chunks:n, size:file.size, folder, t:info.t||Date.now(), w:info.w, h:info.h, dur:info.dur, type:file.type||'video/mp4', thumb:info.thumb, tv:2});
 }
 async function deleteItemData(it){
   if(it.chunks){ for(let k=0;k<it.chunks;k++) await idb.del('blobs', `${it.id}:${k}`); }
@@ -814,29 +822,43 @@ function deleteReminder(n){
     el.querySelector('[data-x]').onclick = () => { if(el.querySelector('#rm-off').checked){ try { localStorage.setItem('myst-noremind','1'); } catch {} } close(); };
   });
 }
+let saveChain = Promise.resolve();
+const queueSave = () => (saveChain = saveChain.then(saveIndex).catch(()=>{}));
 async function importFiles(files, fromLibrary){
   if(!files.length || !S.dek || !S.folder) return;
-  let ok=0, ng=0;
-  for(const [i,file] of files.entries()){
-    busy(true, `取り込み中… ${i+1} / ${files.length}`);
-    try {
-      const isVideo = (file.type||'').startsWith('video/') || /\.(mov|mp4|m4v|webm)$/i.test(file.name||'');
-      if(isVideo){
-        busy(true, `動画を準備中… ${i+1} / ${files.length}`);
-        const info = await videoInfo(file); if(!info) throw new Error('video');
-        await storeVideo(file, info, S.folder, p => busy(true, `動画を暗号化中… ${i+1} / ${files.length}（${Math.round(p*100)}%）`));
-        await saveIndex(); ok++;
-      } else {
-        const buf = await file.arrayBuffer();
-        const type = file.type || 'image/jpeg';
-        const bmp = await createImageBitmap(new Blob([buf], {type}));
-        await storeImage(buf, type, bmp, S.folder); bmp.close && bmp.close(); ok++;
-      }
-    } catch { ng++; }
-  }
-  if(ok) await saveIndex();
+  const folder = S.folder, total = files.length, base = Date.now();
+  const isVid = f => (f.type||'').startsWith('video/') || /\.(mov|mp4|m4v|webm)$/i.test(f.name||'');
+  // storage check before a big batch
+  try { const est = await navigator.storage.estimate(); const need = files.reduce((a,f)=>a+f.size,0)*1.05;
+    if(est.quota && est.quota-est.usage < need && !await confirmSheet('空き容量が足りないかもしれません', `必要な目安 ${fmtSize(need)}／使える残り ${fmtSize(est.quota-est.usage)}。入りきらなかった時点で止めます。`, '続ける')) return;
+  } catch {}
+  let ok=0, ng=0, done=0, stop=false, quota=false, unsaved=0, vidPct=null, wake=null;
+  S.importing = true;
+  try { wake = await navigator.wakeLock.request('screen'); } catch {}
+  const paint = () => busy(true, `保管中… ${done} / ${total}${vidPct!=null?`（動画 ${vidPct}%）`:''}`, {progress: done/total, onCancel: () => { stop = true; busy(true, '中止しています…', {progress: done/total}); }});
+  paint();
+  const fail = err => { if(err && err.name==='QuotaExceededError'){ quota=true; stop=true; } ng++; };
+  const after = () => { done++; if(++unsaved>=15){ unsaved=0; queueSave(); } paint(); };
+  // photos: 3 at a time
+  const photos = files.map((f,i)=>({f,i})).filter(x=>!isVid(x.f)), videos = files.map((f,i)=>({f,i})).filter(x=>isVid(x.f));
+  let next = 0;
+  const worker = async () => { while(!stop && next < photos.length){ const {f,i} = photos[next++];
+    try { const buf = await f.arrayBuffer(), type = f.type || 'image/jpeg'; const bmp = await createImageBitmap(new Blob([buf], {type}));
+      await storeImage(buf, type, bmp, folder, base + i); bmp.close && bmp.close(); ok++; } catch(err){ fail(err); }
+    after(); } };
+  await Promise.all([worker(), worker(), worker()]);
+  // videos: one at a time (they are large)
+  for(const {f,i} of videos){ if(stop) break;
+    try { vidPct = 0; paint(); const info = await videoInfo(f); if(!info) throw new Error('video'); info.t = base + i;
+      await storeVideo(f, info, folder, p => { vidPct = Math.round(p*100); paint(); }); ok++; } catch(err){ fail(err); }
+    vidPct = null; unsaved = 99; after(); }
+  await queueSave(); if(ok) { await saveIndex(); }
+  S.importing = false; try { wake && wake.release(); } catch {}
   busy(false); renderHome();
-  toast(ng ? `${ok}件を保管、${ng}件は読み込めませんでした` : `${ok}件を保管しました`);
+  const skipped = total - done;
+  if(S.lockPending){ S.lockPending = false; lock(); toast(`${ok}件を保管しました`); return; }
+  if(quota) await confirmSheet('容量がいっぱいになりました', `${ok}件を保管し、残り${total-ok}件は保管できませんでした。不要な写真・動画を消すか、端末の空きを増やしてください。`, 'わかった');
+  else toast(`${ok}件を保管${ng?`、${ng}件は読み込めませんでした`:''}${skipped?`、${skipped}件は中止しました`:''}`);
   if(ok && fromLibrary) deleteReminder(ok);
 }
 async function getBlob(id){
