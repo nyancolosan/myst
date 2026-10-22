@@ -222,6 +222,9 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--muted);transition:transform .2s, background .2s}
 .switch[aria-checked="true"]{background:var(--accent)}
 .switch[aria-checked="true"]::after{transform:translateX(20px);background:var(--accent-fg)}
+#veil{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:#1b2440 url("fog-art.jpg") center/cover no-repeat}
+#veil::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(17,23,39,.35),rgba(27,36,64,.55))}
+#veil b{position:relative;z-index:1;font-family:var(--f-display);font-weight:400;font-size:34px;letter-spacing:.55em;margin-right:-.55em;color:#fff;text-shadow:0 0 24px rgba(150,176,224,.9)}
 .toast{position:absolute;left:50%;width:max-content;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--accent);color:var(--accent-fg);box-shadow:var(--shadow);padding:10px 18px;border-radius:999px;font-size:13.5px;z-index:40;max-width:calc(100% - 32px);text-align:center}
 .busy{position:absolute;inset:0;background:var(--scrim);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:grid;place-items:center;z-index:30;color:#fff;font-size:14px;letter-spacing:.06em}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
@@ -356,6 +359,7 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
   </section>
 
   <div id="sheet-wrap" class="sheet-wrap" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+  <div id="veil" aria-hidden="true" hidden><b>MYST</b></div>
   <div id="busy" class="busy" hidden>処理中…</div>
   <div id="toast" class="toast" role="status" hidden></div>
   <input type="file" id="file" accept="image/*" hidden>
@@ -619,7 +623,19 @@ const Fog = {
     });
   },
 };
-document.addEventListener('visibilitychange', () => { if(document.hidden && S.dek && !S.picking) lock(); });
+/* Privacy veil: cover the screen the instant the app loses focus, so the app switcher snapshot shows only fog. */
+const veil = $('#veil');
+const cover = () => { if(S.picking) return; veil.hidden = false; };
+const uncover = () => { if(!document.hidden) veil.hidden = true; };
+window.addEventListener('blur', cover);
+window.addEventListener('pagehide', cover);
+document.addEventListener('freeze', cover);
+window.addEventListener('focus', uncover);
+window.addEventListener('pageshow', uncover);
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){ cover(); if(S.dek && !S.picking) lock(); }
+  else setTimeout(uncover, 50);
+});
 $('#btn-lock').onclick = lock;
 
 /* ---------- Index ---------- */
