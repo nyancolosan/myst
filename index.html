@@ -753,8 +753,17 @@ function pickFiles(multiple, cb, input='#file', accept='image/*'){
   window.addEventListener('focus', function h(){ window.removeEventListener('focus', h); setTimeout(()=>{ if(!f.files.length) S.picking=false; }, 1500); });
   f.click();
 }
+const dimsOf = src => ({w: src.videoWidth||src.naturalWidth||src.width||0, h: src.videoHeight||src.naturalHeight||src.height||0});
+async function decodeImage(blob){
+  try { return await createImageBitmap(blob); } catch {}
+  const u = URL.createObjectURL(blob);
+  try { const img = new Image(); img.decoding = 'async'; img.src = u;
+    await new Promise((ok, ng) => { img.onload = ok; img.onerror = () => ng(new Error('decode')); });
+    if(!img.naturalWidth) throw new Error('decode'); return img;
+  } finally { setTimeout(()=>URL.revokeObjectURL(u), 1000); }
+}
 function canvasFrom(src, max){
-  const w = src.width, h = src.height, k = Math.min(1, max / Math.max(w, h));
+  const {w, h} = dimsOf(src), k = Math.min(1, max / Math.max(w, h)); k = Math.min(1, max / Math.max(w, h));
   const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w*k)); c.height = Math.max(1, Math.round(h*k));
   c.getContext('2d').drawImage(src, 0, 0, c.width, c.height); return c;
 }
@@ -762,7 +771,7 @@ async function upgradeThumbs(){
   const vault = S.vault; let n = 0;
   for(const it of S.index ? S.index.items.filter(i=>(i.tv||1)<2 && i.kind!=='video') : []){
     if(!S.dek || S.vault!==vault) return;
-    try { const bmp = await createImageBitmap(await getBlob(it.id)); it.thumb = thumbOf(bmp); it.tv = 2; bmp.close && bmp.close(); n++; } catch {}
+    try { const bmp = await decodeImage(await getBlob(it.id)); it.thumb = thumbOf(bmp); it.tv = 2; bmp.close && bmp.close(); n++; } catch {}
     if(n && n%6===0 && S.vault===vault){ await saveIndex(); renderHome(); }
     await new Promise(r=>setTimeout(r,30));
   }
@@ -770,23 +779,26 @@ async function upgradeThumbs(){
 }
 function thumbOf(src){
   const N=420, c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
-  const sw=src.videoWidth||src.width, sh=src.videoHeight||src.height;
+  const {w:sw, h:sh} = dimsOf(src);
   const s=Math.max(N/sw, N/sh); const w=sw*s, h=sh*s;
   x.drawImage(src, (N-w)/2, (N-h)/2, w, h); return c.toDataURL('image/jpeg', .82);
 }
 async function storeImage(buf, type, drawable, folder, t){
   const id = uid(); const {iv, ct} = await seal(S.dek, buf);
   await idb.put('blobs', {id, vault:S.vault, iv, ct});
-  S.index.items.push({id, folder, t:t||Date.now(), w:drawable.width, h:drawable.height, type, thumb:thumbOf(drawable), tv:2});
+  const d = drawable ? dimsOf(drawable) : {w:0,h:0};
+  S.index.items.push({id, folder, t:t||Date.now(), w:d.w, h:d.h, type, thumb: drawable ? thumbOf(drawable) : placeholderThumb('photo'), tv: drawable ? 2 : 1});
   return id;
 }
 const CHUNK = 8*1024*1024;
 function fmtDur(d){ d=Math.max(0,Math.round(d||0)); const h=Math.floor(d/3600), m=Math.floor(d%3600/60), x=d%60; return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0'); }
 function fmtSize(b){ return b>=1e9 ? (b/1e9).toFixed(1)+'GB' : (b/1e6).toFixed(b>=1e8?0:1)+'MB'; }
-function placeholderThumb(){
+function placeholderThumb(kind){
   const N=420, c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
   const g=x.createLinearGradient(0,0,N,N); g.addColorStop(0,'#2a3658'); g.addColorStop(1,'#141b2e'); x.fillStyle=g; x.fillRect(0,0,N,N);
-  x.fillStyle='rgba(255,255,255,.85)'; x.beginPath(); x.moveTo(N*.42,N*.36); x.lineTo(N*.64,N*.5); x.lineTo(N*.42,N*.64); x.closePath(); x.fill();
+  x.fillStyle='rgba(255,255,255,.85)';
+  if(kind==='photo'){ x.font=`600 ${N*.09}px sans-serif`; x.textAlign='center'; x.fillText('PHOTO', N/2, N*.53); }
+  else { x.beginPath(); x.moveTo(N*.42,N*.36); x.lineTo(N*.64,N*.5); x.lineTo(N*.42,N*.64); x.closePath(); x.fill(); }
   return c.toDataURL('image/jpeg',.82);
 }
 function videoInfo(file){
@@ -848,13 +860,15 @@ async function importFiles(files, fromLibrary){
   try { wake = await navigator.wakeLock.request('screen'); } catch {}
   const paint = () => busy(true, `保管中… ${done} / ${total}${vidPct!=null?`（動画 ${vidPct}%）`:''}`, {progress: done/total, onCancel: () => { stop = true; busy(true, '中止しています…', {progress: done/total}); }});
   paint();
-  const fail = err => { if(err && err.name==='QuotaExceededError'){ quota=true; stop=true; } ng++; };
+  let why = '';
+  const fail = err => { if(err && err.name==='QuotaExceededError'){ quota=true; stop=true; } if(!why && err) why = `${err.name||'Error'}: ${err.message||''}`; ng++; };
   const after = () => { done++; if(++unsaved>=15){ unsaved=0; queueSave(); } paint(); };
   // photos: 3 at a time
   const photos = files.map((f,i)=>({f,i})).filter(x=>!isVid(x.f)), videos = files.map((f,i)=>({f,i})).filter(x=>isVid(x.f));
   let next = 0;
   const worker = async () => { while(!stop && next < photos.length){ const {f,i} = photos[next++];
-    try { const buf = await f.arrayBuffer(), type = f.type || 'image/jpeg'; const bmp = await createImageBitmap(new Blob([buf], {type}));
+    try { const buf = await f.arrayBuffer(), type = f.type || (/\.hei[cf]$/i.test(f.name||'') ? 'image/heic' : 'image/jpeg');
+      let bmp = null; try { bmp = await decodeImage(new Blob([buf], {type})); } catch {}   // keep the photo even if a preview can't be made
       await storeImage(buf, type, bmp, folder, base + i); bmp.close && bmp.close(); ok++; } catch(err){ fail(err); }
     after(); } };
   await Promise.all([worker(), worker(), worker()]);
@@ -869,7 +883,8 @@ async function importFiles(files, fromLibrary){
   const skipped = total - done;
   if(S.lockPending){ S.lockPending = false; lock(); toast(`${ok}件を保管しました`); return; }
   if(quota) await confirmSheet('容量がいっぱいになりました', `${ok}件を保管し、残り${total-ok}件は保管できませんでした。不要な写真・動画を消すか、端末の空きを増やしてください。`, 'わかった');
-  else toast(`${ok}件を保管${ng?`、${ng}件は読み込めませんでした`:''}${skipped?`、${skipped}件は中止しました`:''}`);
+  else if(ng) await confirmSheet(`${ng}件を保管できませんでした`, `${ok}件は保管しました。原因：${why || '不明'}（この文をそのままClaudeに伝えてください）`, 'わかった');
+  else toast(`${ok}件を保管${skipped?`、${skipped}件は中止しました`:''}`);
   if(ok && fromLibrary) deleteReminder(ok);
 }
 async function getBlob(id){
@@ -990,7 +1005,7 @@ $('#va-cover').onclick = async () => {
 };
 $('#va-collage').onclick = async () => {
   const id = S.viewId; if(!id) return;
-  busy(true); try { const bmp = await createImageBitmap(await getBlob(id)); E.open(); E.setBase(bmp); } catch { toast('写真を開けませんでした'); } busy(false);
+  busy(true); try { const bmp = await decodeImage(await getBlob(id)); E.open(); E.setBase(bmp); } catch { toast('写真を開けませんでした'); } busy(false);
 };
 
 /* ---------- Picking a source photo ---------- */
@@ -1004,8 +1019,8 @@ function pickFromVault(title, folder){
 }
 async function pickSource(title){
   const v = await choose(title, [{label:'MYSTの写真から選ぶ', value:'vault'}, {label:'端末の写真から選ぶ', value:'device', sub:'選んだ写真はMYSTには保存されません'}]);
-  if(v==='vault'){ const id = await pickFromVault(title); if(!id) return null; busy(true); try { return await createImageBitmap(await getBlob(id)); } finally { busy(false); } }
-  if(v==='device'){ return new Promise(res => pickFiles(false, async files => { if(!files[0]) return res(null); try { res(await createImageBitmap(files[0])); } catch { toast('この写真は読み込めませんでした'); res(null); } })); }
+  if(v==='vault'){ const id = await pickFromVault(title); if(!id) return null; busy(true); try { return await decodeImage(await getBlob(id)); } finally { busy(false); } }
+  if(v==='device'){ return new Promise(res => pickFiles(false, async files => { if(!files[0]) return res(null); try { res(await decodeImage(files[0])); } catch { toast('この写真は読み込めませんでした'); res(null); } })); }
   return null;
 }
 
