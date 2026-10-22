@@ -771,7 +771,7 @@ async function decodeImage(blob){
   } finally { setTimeout(()=>URL.revokeObjectURL(u), 1000); }
 }
 function canvasFrom(src, max){
-  const {w, h} = dimsOf(src), k = Math.min(1, max / Math.max(w, h)); k = Math.min(1, max / Math.max(w, h));
+  const {w, h} = dimsOf(src), k = Math.min(1, max / Math.max(w, h));
   const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w*k)); c.height = Math.max(1, Math.round(h*k));
   c.getContext('2d').drawImage(src, 0, 0, c.width, c.height); return c;
 }
