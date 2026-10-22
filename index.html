@@ -89,7 +89,8 @@ button{cursor:pointer}
 .top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-block:calc(8px + env(safe-area-inset-top,0px)) 8px;min-height:calc(54px + env(safe-area-inset-top,0px));flex:none}
 .brand-sm{display:flex;flex-direction:column;line-height:1.15}
 .brand-sm b{font-family:var(--f-display);font-weight:400;font-size:17px;letter-spacing:.45em}
-.brand-sm small{font-family:var(--f-mono);font-size:10px;letter-spacing:.24em;color:var(--muted);font-variant-numeric:tabular-nums}
+.brand-sm{min-width:0}
+.brand-sm small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;color:var(--muted);font-variant-numeric:tabular-nums}
 .top-title{font-size:13px;letter-spacing:.2em;color:var(--muted)}
 .top-actions{display:flex;gap:2px}
 .icon-btn{width:44px;height:44px;display:grid;place-items:center;border:0;background:transparent;border-radius:50%;color:var(--fg)}
@@ -106,7 +107,22 @@ button{cursor:pointer}
 .chip{flex:none;border:1px solid var(--line);background:var(--surface);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;padding:6px 15px;min-height:36px;white-space:nowrap;font-size:13.5px}
 .chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);box-shadow:0 6px 18px rgba(var(--mist-rgb),.45)}
 .chip.add{border-style:dashed;color:var(--muted);background:transparent}
-.folder-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding-block:0 8px;flex:none}
+.folder-head{display:flex;align-items:center;justify-content:space-between;gap:4px;padding-block:2px 10px;flex:none;min-height:48px}
+.fh-left{display:flex;align-items:center;gap:2px;min-width:0}
+.back-btn{border:0;background:transparent;width:40px;height:40px;margin-left:-10px;border-radius:50%;display:grid;place-items:center;color:var(--fg);flex:none}
+.back-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px 12px;padding-bottom:24px}
+.fcard{border:0;background:transparent;padding:0;text-align:left;display:flex;flex-direction:column;gap:7px;min-width:0}
+.fcover{position:relative;aspect-ratio:1;width:100%;border-radius:22px;overflow:hidden;background:linear-gradient(150deg,rgba(var(--wisp-rgb),.35),rgba(var(--mist-rgb),.35));box-shadow:var(--shadow);border:1px solid var(--line)}
+.fcover img{width:100%;height:100%;object-fit:cover;display:block}
+.fcover .star{position:absolute;top:8px;left:8px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:rgba(10,14,26,.45);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.fcover .star svg{width:13px;height:13px;fill:#fff}
+.fcover .empty-ico{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:12px;letter-spacing:.1em}
+.fmeta{display:flex;align-items:baseline;justify-content:space-between;gap:6px;padding-inline:2px}
+.fname{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.fcount{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+.fcard.add .fcover{background:transparent;border:1.5px dashed var(--line);box-shadow:none;display:grid;place-items:center;color:var(--muted);font-size:14px}
+.th.is-cover::before{content:"";position:absolute;inset:0;border:2px solid var(--accent);border-radius:12px;z-index:1;pointer-events:none}
 .folder-name{font-weight:700;font-size:18px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .count{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);font-weight:500;margin-left:10px;letter-spacing:.06em;font-variant-numeric:tabular-nums}
 .scroll{flex:1;min-height:0;overflow-y:auto}
@@ -114,8 +130,9 @@ button{cursor:pointer}
 .th{position:relative;aspect-ratio:1;border:0;padding:0;background:var(--sunk);overflow:hidden;display:block;width:100%;border-radius:12px}
 .th img{width:100%;height:100%;object-fit:cover;display:block;transition:filter .5s ease, transform .5s ease}
 .th::after{content:"";position:absolute;inset:0;background:rgba(var(--mist-rgb),0);transition:background .5s ease;pointer-events:none}
-.fogged .th img{filter:blur(12px) saturate(.4);transform:scale(1.2)}
-.fogged .th::after{background:linear-gradient(160deg,rgba(var(--wisp-rgb),.45),rgba(var(--mist-rgb),.35))}
+.vbadge{position:absolute;right:6px;bottom:6px;display:flex;align-items:center;gap:4px;padding:2px 7px 2px 6px;border-radius:999px;background:rgba(10,14,26,.55);color:#fff;font-family:var(--f-mono);font-size:11px;font-variant-numeric:tabular-nums;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);pointer-events:none}
+.vbadge svg{width:9px;height:9px;fill:#fff}
+.view-stage video{max-width:100%;max-height:100%;border-radius:4px;background:#000}
 .empty{padding:48px 8px;color:var(--muted);max-width:32ch;margin:0 auto;text-align:center;font-size:14px}
 .empty strong{display:block;color:var(--fg);font-size:16px;margin-bottom:8px;letter-spacing:.04em}
 .bottom-bar{display:flex;gap:8px;padding-block:10px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);flex:none}
@@ -152,8 +169,14 @@ button{cursor:pointer}
 .view-stage img.sized{position:absolute;max-width:none;max-height:none;transform:none}
 .zoom-badge{position:absolute;top:10px;right:max(12px, env(safe-area-inset-right, 0px));font-family:var(--f-mono);font-size:11.5px;padding:4px 10px;border-radius:999px;background:var(--surface);color:var(--fg);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);pointer-events:none;font-variant-numeric:tabular-nums}
 .view-stage img.reveal{animation:clear .6s ease-out}
+.view-stage .slide-in-l{animation:slideL .28s ease-out}
+.view-stage .slide-in-r{animation:slideR .28s ease-out}
+@keyframes slideL{from{transform:translateX(38%);opacity:.2}}
+@keyframes slideR{from{transform:translateX(-38%);opacity:.2}}
+.view-stage .snap{transition:transform .22s ease-out}
+.va[aria-pressed="true"] svg{fill:currentColor}
 .view-meta{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);letter-spacing:.04em}
-.view-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding-block:10px calc(10px + env(safe-area-inset-bottom,0px));flex:none;border-top:1px solid var(--line)}
+.view-actions{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding-block:10px calc(10px + env(safe-area-inset-bottom,0px));flex:none;border-top:1px solid var(--line)}
 .va{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;padding:6px 0;min-height:52px;color:var(--fg)}
 .va svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .va{color:var(--accent)}
@@ -199,7 +222,7 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--muted);transition:transform .2s, background .2s}
 .switch[aria-checked="true"]{background:var(--accent)}
 .switch[aria-checked="true"]::after{transform:translateX(20px);background:var(--accent-fg)}
-.toast{position:absolute;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--accent);color:var(--accent-fg);box-shadow:var(--shadow);padding:10px 18px;border-radius:999px;font-size:13.5px;z-index:40;max-width:calc(100% - 32px);text-align:center}
+.toast{position:absolute;left:50%;width:max-content;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--accent);color:var(--accent-fg);box-shadow:var(--shadow);padding:10px 18px;border-radius:999px;font-size:13.5px;z-index:40;max-width:calc(100% - 32px);text-align:center}
 .busy{position:absolute;inset:0;background:var(--scrim);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:grid;place-items:center;z-index:30;color:#fff;font-size:14px;letter-spacing:.06em}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -224,14 +247,15 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
     <header class="top gut">
       <div class="brand-sm"><b>MYST</b><small id="stat">MY STORAGE</small></div>
       <div class="top-actions">
-        <button class="icon-btn" id="btn-fog" aria-pressed="true" aria-label="一覧の霧（ぼかし）"><svg viewBox="0 0 24 24"><path d="M4 9h11a3 3 0 1 0-3-3"/><path d="M3 13h16a3 3 0 1 1-3 3"/><path d="M5 17h7"/></svg></button>
         <button class="icon-btn" id="btn-settings" aria-label="設定"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         <button class="icon-btn" id="btn-lock" aria-label="ロックする"><svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg></button>
       </div>
     </header>
-    <nav id="folders" class="folders gut" aria-label="フォルダ"></nav>
     <div class="folder-head gut">
-      <div class="folder-name" id="folder-name">すべて</div>
+      <div class="fh-left">
+        <button class="back-btn" id="btn-folder-back" aria-label="フォルダ一覧に戻る" hidden><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <div class="folder-name" id="folder-name">フォルダ</div>
+      </div>
       <button class="icon-btn" id="btn-folder-menu" aria-label="フォルダの操作" hidden><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button>
     </div>
     <div class="scroll gut">
@@ -239,7 +263,8 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
       <div id="empty" class="empty" hidden></div>
     </div>
     <footer class="bottom-bar gut frost">
-      <button class="btn primary" id="btn-import">写真を追加</button>
+      <button class="btn primary" id="btn-newfolder" hidden>＋ 新しいフォルダ</button>
+      <button class="btn primary" id="btn-import">追加</button>
       <button class="btn" id="btn-camera">撮影</button>
       <button class="btn" id="btn-collage">コラージュ</button>
     </footer>
@@ -251,9 +276,10 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
       <button class="text-btn" id="view-back">← 戻る</button>
       <div class="view-meta" id="view-meta"></div>
     </header>
-    <div class="view-stage" id="view-stage"><img id="view-img" alt="" draggable="false"><span class="zoom-badge" id="zoom-badge" hidden></span></div>
+    <div class="view-stage" id="view-stage"><img id="view-img" alt="" draggable="false"><video id="view-video" controls playsinline preload="metadata" hidden></video><span class="zoom-badge" id="zoom-badge" hidden></span></div>
     <div class="view-actions gut">
       <button class="va" id="va-move"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M10 13h6M13 10l3 3-3 3"/></svg>移動</button>
+      <button class="va" id="va-cover" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></svg>表紙</button>
       <button class="va" id="va-collage"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="2"/><rect x="9" y="9" width="12" height="12" rx="2"/></svg>土台にする</button>
       <button class="va" id="va-export"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 19h16"/></svg>書き出し</button>
       <button class="va danger" id="va-delete"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>削除</button>
@@ -334,7 +360,7 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
   <div id="toast" class="toast" role="status" hidden></div>
   <input type="file" id="file" accept="image/*" hidden>
   <input type="file" id="file-backup" accept="application/json,.json" hidden>
-  <input type="file" id="file-cam" accept="image/*" capture="environment" hidden>
+  <input type="file" id="file-cam" accept="image/*,video/*" capture="environment" hidden>
 </div>
 
 <script>
@@ -413,7 +439,7 @@ async function tryEntries(code){
 }
 
 /* ---------- State ---------- */
-const S = { fog:true, dek:null, vault:null, role:null, entryId:null, index:null, folder:'all', picking:false, urls:[], sheetPad:null, viewId:null };
+const S = { dek:null, vault:null, role:null, entryId:null, index:null, folder:null, picking:false, urls:[], sheetPad:null, viewId:null };
 let lockMode = 'unlock', setupFirst = null;
 
 /* ---------- UI helpers ---------- */
@@ -477,6 +503,7 @@ function makePad(host, {onSubmit, min=4, max=8}){
   return { press, reset(){ code=''; paint(); }, setBusy(v){ busyP=v; paint(); }, shake(){ dots.classList.remove('shake'); void dots.offsetWidth; dots.classList.add('shake'); } };
 }
 document.addEventListener('keydown', e => {
+  if(!$('#scr-view').hidden && $('#sheet-wrap').hidden){ if(e.key==='ArrowRight'){ stepViewer(1); return; } if(e.key==='ArrowLeft'){ stepViewer(-1); return; } }
   const pad = S.sheetPad || (!$('#scr-lock').hidden && $('#sheet-wrap').hidden ? lockPad : null);
   if(!pad) return;
   if(/^\d$/.test(e.key)) pad.press(e.key);
@@ -549,8 +576,8 @@ function go(url){
 async function enter(r){
   S.entryId = r.entry.id; S.vault = r.data.vault; S.role = r.data.role;
   S.dek = await importDek(unb64(r.data.dek));
-  S.index = await loadIndex();
-  S.folder = 'all'; S.fog = fogPref();
+  S.index = await loadIndex(); if(S._migrated){ S._migrated=false; await saveIndex(); }
+  S.folder = null;
   Fog.stop(); show('scr-home'); renderHome(); upgradeThumbs();
   const h=$('#scr-home'); h.classList.remove('clearing'); void h.offsetWidth; h.classList.add('clearing');
 }
@@ -558,14 +585,13 @@ function lock(){
   closeSheetSilently();
   S.dek=null; S.index=null; S.vault=null; S.role=null; S.entryId=null; S.viewId=null;
   S.urls.forEach(u=>URL.revokeObjectURL(u)); S.urls=[];
-  $('#grid').innerHTML=''; $('#view-img').removeAttribute('src');
+  $('#grid').innerHTML=''; $('#view-img').removeAttribute('src'); stopVideo();
   E.reset(); C.layer=null;
   lockMode='unlock'; lockPad.reset(); lockMsg('パスコードを入力');
   show('scr-lock'); Fog.start();
 }
 
 /* ---------- Fog ---------- */
-function fogPref(){ try { return localStorage.getItem('myst-fog')!=='off'; } catch { return true; } }
 const Fog = {
   raf:0, blobs:null, t:0,
   start(){
@@ -593,7 +619,6 @@ const Fog = {
     });
   },
 };
-$('#btn-fog').onclick = () => { S.fog = !S.fog; renderHome(); toast(S.fog ? '霧をかけました' : '霧を晴らしました'); };
 document.addEventListener('visibilitychange', () => { if(document.hidden && S.dek && !S.picking) lock(); });
 $('#btn-lock').onclick = lock;
 
@@ -602,7 +627,12 @@ async function loadIndex(){
   const r = await idb.get('index', S.vault);
   const base = {folders:[], items:[], decoys:[]};
   if(!r) return base;
-  return {...base, ...JSON.parse(TD.decode(await unseal(S.dek, r.iv, r.ct)))};
+  const idx = {...base, ...JSON.parse(TD.decode(await unseal(S.dek, r.iv, r.ct)))};
+  // every item must live in a folder: gather loose ones into one folder
+  const ids = new Set(idx.folders.map(f=>f.id));
+  const loose = idx.items.filter(i=>!i.folder || !ids.has(i.folder));
+  if(loose.length){ const f={id:uid(), name:'マイフォルダ'}; idx.folders.unshift(f); loose.forEach(i=>{ i.folder=f.id; }); S._migrated = true; }
+  return idx;
 }
 async function saveIndex(){
   const {iv, ct} = await seal(S.dek, TE.encode(JSON.stringify(S.index)));
@@ -610,48 +640,78 @@ async function saveIndex(){
 }
 
 /* ---------- Home ---------- */
-function folderLabel(f){ if(f==='all') return 'すべて'; if(f==='none') return '未分類'; const x=S.index.folders.find(x=>x.id===f); return x?x.name:'すべて'; }
-function itemsIn(f){ const it=S.index.items; const l = f==='all'?it : f==='none'?it.filter(i=>!i.folder) : it.filter(i=>i.folder===f); return l.slice().sort((a,b)=>b.t-a.t); }
+function folderLabel(f){ const x=S.index.folders.find(x=>x.id===f); return x?x.name:''; }
+function itemsIn(f){ const it=S.index.items; const l = f==='all' ? it : it.filter(i=>i.folder===f); return l.slice().sort((a,b)=>b.t-a.t); }
+function coverOf(f){ const list=itemsIn(f.id); const c = list.find(i=>i.id===f.cover); return c || list[0] || null; }
+const STAR = '<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></svg>';
 function renderHome(){
   if(!S.index) return;
-  if(S.folder!=='all' && S.folder!=='none' && !S.index.folders.some(f=>f.id===S.folder)) S.folder='all';
-  const chips = [{id:'all',name:'すべて'},{id:'none',name:'未分類'},...S.index.folders];
-  $('#folders').innerHTML = chips.map(f=>`<button class="chip" data-f="${esc(f.id)}" aria-pressed="${f.id===S.folder}">${esc(f.name)}</button>`).join('') + `<button class="chip add" id="chip-add">＋ フォルダ</button>`;
-  const list = itemsIn(S.folder);
-  $('#folder-name').innerHTML = `${esc(folderLabel(S.folder))}<span class="count">${list.length}枚</span>`;
-  $('#btn-folder-menu').hidden = S.folder==='all' || S.folder==='none';
-  $('#stat').textContent = `${S.index.items.length} PHOTOS · ${S.index.folders.length} FOLDERS`;
-  $('#grid').classList.toggle('fogged', !!S.fog);
-  $('#btn-fog').setAttribute('aria-pressed', !!S.fog);
-  $('#grid').innerHTML = list.map(i=>`<button class="th" data-id="${i.id}" aria-label="写真 ${new Date(i.t).toLocaleDateString('ja-JP')}"><img src="${i.thumb}" alt="" loading="lazy"></button>`).join('');
-  const empty = $('#empty');
-  if(list.length){ empty.hidden=true; }
-  else {
-    empty.hidden=false;
-    empty.innerHTML = S.index.items.length
-      ? `<strong>このフォルダは空です</strong>写真を開いて「移動」からここに入れられます。`
-      : `<strong>まだ写真がありません</strong>「写真を追加」から取り込むと、この端末の中だけで暗号化して保管します。元の写真アプリに残った写真は、ご自身で削除してください。`;
+  if(S.folder && !S.index.folders.some(f=>f.id===S.folder)) S.folder=null;
+  const nv = S.index.items.filter(i=>i.kind==='video').length;
+  $('#stat').textContent = `${S.index.items.length-nv} PHOTOS · ${nv} VIDEOS · ${S.index.folders.length} FOLDERS`;
+  const inFolder = !!S.folder, grid=$('#grid'), empty=$('#empty');
+  $('#btn-folder-back').hidden = !inFolder; $('#btn-folder-menu').hidden = !inFolder;
+  $('#btn-newfolder').hidden = inFolder; $('#btn-import').hidden = !inFolder; $('#btn-camera').hidden = !inFolder;
+  if(!inFolder){
+    grid.className='fgrid';
+    $('#folder-name').innerHTML = `フォルダ<span class="count">${S.index.folders.length}</span>`;
+    grid.innerHTML = S.index.folders.map(f=>{ const c=coverOf(f), n=itemsIn(f.id).length, fav=c && c.id===f.cover;
+      return `<button class="fcard" data-f="${esc(f.id)}"><div class="fcover">${c?`<img src="${c.thumb}" alt="" loading="lazy">`:'<span class="empty-ico">EMPTY</span>'}${fav?`<span class="star" aria-label="お気に入りの表紙">${STAR}</span>`:''}</div><div class="fmeta"><span class="fname">${esc(f.name)}</span><span class="fcount">${n}</span></div></button>`; }).join('')
+      + `<button class="fcard add" id="fcard-add"><div class="fcover">＋ 新しいフォルダ</div></button>`;
+    empty.hidden = !!S.index.folders.length;
+    empty.innerHTML = `<strong>まずフォルダを作りましょう</strong>写真や動画は、必ずどれかのフォルダに入れて保管します。`;
+    return;
   }
+  const f = S.index.folders.find(x=>x.id===S.folder), list = itemsIn(S.folder);
+  grid.className='grid';
+  $('#folder-name').innerHTML = `${esc(f.name)}<span class="count">${list.length}件</span>`;
+  grid.innerHTML = list.map(i=>`<button class="th${i.id===f.cover?' is-cover':''}" data-id="${i.id}" aria-label="${i.kind==='video'?'動画':'写真'} ${new Date(i.t).toLocaleDateString('ja-JP')}"><img src="${i.thumb}" alt="" loading="lazy">${i.kind==='video'?`<span class="vbadge"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg>${fmtDur(i.dur)}</span>`:''}</button>`).join('');
+  empty.hidden = !!list.length;
+  empty.innerHTML = `<strong>このフォルダは空です</strong>「追加」で写真や動画を取り込むか、「撮影」で直接保管できます。元の写真アプリに残ったものは、ご自身で削除してください。`;
 }
-$('#folders').addEventListener('click', async e => {
-  const b = e.target.closest('button'); if(!b) return;
-  if(b.id==='chip-add'){ const n = await askText('新しいフォルダ', '', '作成', '例：旅行、書類'); if(!n) return;
-    const f = {id:uid(), name:n}; S.index.folders.push(f); S.folder=f.id; await saveIndex(); renderHome(); return; }
-  S.folder = b.dataset.f; renderHome();
-});
+async function newFolder(open=true){
+  const n = await askText('新しいフォルダ', '', '作成', '例：旅行、書類'); if(!n) return null;
+  const f = {id:uid(), name:n}; S.index.folders.push(f); if(open) S.folder=f.id; await saveIndex(); renderHome(); return f;
+}
+$('#btn-newfolder').onclick = () => newFolder();
+$('#btn-folder-back').onclick = () => { S.folder=null; renderHome(); $('.scroll').scrollTop=0; };
 $('#btn-folder-menu').onclick = async () => {
   const f = S.index.folders.find(x=>x.id===S.folder); if(!f) return;
-  const a = await choose(`フォルダ「${f.name}」`, [{label:'名前を変更',value:'rename'},{label:'フォルダを削除',value:'del',sub:'中の写真は「未分類」に移ります',danger:true}]);
+  const a = await choose(`フォルダ「${f.name}」`, [{label:'表紙を選ぶ',value:'cover',sub:'お気に入りの写真をフォルダの表紙にします'},{label:'名前を変更',value:'rename'},{label:'フォルダを削除',value:'del',danger:true}]);
+  if(a==='cover'){ const id = await pickFromVault('表紙にする写真を選ぶ', f.id); if(!id) return; f.cover=id; await saveIndex(); renderHome(); toast('表紙に設定しました'); }
   if(a==='rename'){ const n = await askText('フォルダ名を変更', f.name, '変更'); if(!n) return; f.name=n; await saveIndex(); renderHome(); }
-  if(a==='del'){ if(!await confirmSheet(`「${f.name}」を削除しますか？`, '中の写真は削除されず「未分類」に移ります。', '削除する', true)) return;
-    S.index.items.forEach(i=>{ if(i.folder===f.id) i.folder=null; });
-    S.index.folders = S.index.folders.filter(x=>x!==f); S.folder='all'; await saveIndex(); renderHome(); }
+  if(a==='del') await deleteFolder(f);
 };
+async function deleteFolder(f){
+  const items = itemsIn(f.id), others = S.index.folders.filter(x=>x!==f);
+  let target = null;
+  if(items.length){
+    const opts = others.map(o=>({label:`「${o.name}」に移して削除`, value:o.id})).concat([{label:`中身${items.length}件ごと削除`, value:'__all', sub:'元に戻せません', danger:true}]);
+    const v = await choose(`「${f.name}」の中身をどうしますか？`, opts); if(!v) return;
+    if(v==='__all'){ if(!await confirmSheet(`${items.length}件をすべて削除しますか？`, 'MYSTから完全に消え、元に戻せません。', '削除する', true)) return; }
+    else target = v;
+  } else if(!await confirmSheet(`「${f.name}」を削除しますか？`, '', '削除する', true)) return;
+  busy(true);
+  for(const it of items){ if(target) it.folder = target; else await deleteItemData(it); }
+  if(!target) S.index.items = S.index.items.filter(i=>i.folder!==f.id);
+  S.index.folders = others; S.folder = target; await saveIndex(); busy(false); renderHome(); toast('フォルダを削除しました');
+}
+async function chooseFolder(title){
+  if(S.folder) return S.folder;
+  const opts = S.index.folders.map(f=>({label:f.name, value:f.id})).concat([{label:'＋ 新しいフォルダを作る', value:'new'}]);
+  let v = await choose(title, opts); if(v==='new'){ const f = await newFolder(false); v = f && f.id; }
+  return v || null;
+}
+$('#grid').addEventListener('click', async e => {
+  const c = e.target.closest('.fcard');
+  if(c){ if(c.id==='fcard-add'){ await newFolder(); } else { S.folder=c.dataset.f; renderHome(); $('.scroll').scrollTop=0; } return; }
+});
 $('#grid').addEventListener('click', e => { const b=e.target.closest('.th'); if(b) openViewer(b.dataset.id); });
 
 /* ---------- Files ---------- */
-function pickFiles(multiple, cb, input='#file'){
+function pickFiles(multiple, cb, input='#file', accept='image/*'){
   const f = $(input); f.multiple = multiple; f.value=''; S.picking = true;
+  if(input==='#file') f.accept = accept;
   const done = () => { setTimeout(()=>{ S.picking=false; }, 800); };
   f.onchange = () => { done(); cb([...f.files]); };
   f.oncancel = done;
@@ -665,7 +725,7 @@ function canvasFrom(src, max){
 }
 async function upgradeThumbs(){
   const vault = S.vault; let n = 0;
-  for(const it of S.index ? S.index.items.filter(i=>(i.tv||1)<2) : []){
+  for(const it of S.index ? S.index.items.filter(i=>(i.tv||1)<2 && i.kind!=='video') : []){
     if(!S.dek || S.vault!==vault) return;
     try { const bmp = await createImageBitmap(await getBlob(it.id)); it.thumb = thumbOf(bmp); it.tv = 2; bmp.close && bmp.close(); n++; } catch {}
     if(n && n%6===0 && S.vault===vault){ await saveIndex(); renderHome(); }
@@ -675,24 +735,63 @@ async function upgradeThumbs(){
 }
 function thumbOf(src){
   const N=420, c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
-  const s=Math.max(N/src.width, N/src.height); const w=src.width*s, h=src.height*s;
+  const sw=src.videoWidth||src.width, sh=src.videoHeight||src.height;
+  const s=Math.max(N/sw, N/sh); const w=sw*s, h=sh*s;
   x.drawImage(src, (N-w)/2, (N-h)/2, w, h); return c.toDataURL('image/jpeg', .82);
 }
 async function storeImage(buf, type, drawable, folder){
   const id = uid(); const {iv, ct} = await seal(S.dek, buf);
   await idb.put('blobs', {id, vault:S.vault, iv, ct});
-  S.index.items.push({id, folder: (folder==='all'||folder==='none') ? null : folder, t:Date.now(), w:drawable.width, h:drawable.height, type, thumb:thumbOf(drawable), tv:2});
+  S.index.items.push({id, folder, t:Date.now(), w:drawable.width, h:drawable.height, type, thumb:thumbOf(drawable), tv:2});
   return id;
 }
-$('#btn-import').onclick = () => pickFiles(true, files => importFiles(files, true));
+const CHUNK = 8*1024*1024;
+function fmtDur(d){ d=Math.max(0,Math.round(d||0)); const h=Math.floor(d/3600), m=Math.floor(d%3600/60), x=d%60; return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0'); }
+function fmtSize(b){ return b>=1e9 ? (b/1e9).toFixed(1)+'GB' : (b/1e6).toFixed(b>=1e8?0:1)+'MB'; }
+function placeholderThumb(){
+  const N=420, c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,N,N); g.addColorStop(0,'#2a3658'); g.addColorStop(1,'#141b2e'); x.fillStyle=g; x.fillRect(0,0,N,N);
+  x.fillStyle='rgba(255,255,255,.85)'; x.beginPath(); x.moveTo(N*.42,N*.36); x.lineTo(N*.64,N*.5); x.lineTo(N*.42,N*.64); x.closePath(); x.fill();
+  return c.toDataURL('image/jpeg',.82);
+}
+function videoInfo(file){
+  return new Promise(res => {
+    const v=document.createElement('video'); v.muted=true; v.playsInline=true; v.preload='auto'; v.setAttribute('playsinline','');
+    const u=URL.createObjectURL(file); let done=false, kick;
+    const finish = r => { if(done) return; done=true; clearTimeout(kick); try { v.pause(); } catch {} v.removeAttribute('src'); v.load(); URL.revokeObjectURL(u); res(r); };
+    const grab = () => { try { if(!v.videoWidth) return finish({thumb:placeholderThumb(), w:0, h:0, dur:v.duration||0}); finish({thumb:thumbOf(v), w:v.videoWidth, h:v.videoHeight, dur:v.duration||0}); } catch { finish({thumb:placeholderThumb(), w:v.videoWidth||0, h:v.videoHeight||0, dur:v.duration||0}); } };
+    v.onloadedmetadata = () => { try { v.currentTime = Math.min(0.5, (v.duration||1)/3); } catch {} kick=setTimeout(()=>{ v.play().then(()=>setTimeout(()=>{ v.pause(); grab(); },250)).catch(grab); },1500); };
+    v.onseeked = () => setTimeout(grab, 60);
+    v.onerror = () => finish(null);
+    setTimeout(() => finish(v.duration ? {thumb:placeholderThumb(), w:v.videoWidth||0, h:v.videoHeight||0, dur:v.duration} : null), 10000);
+    v.src = u;
+  });
+}
+async function storeVideo(file, info, folder, onProgress){
+  const id = uid(), n = Math.max(1, Math.ceil(file.size/CHUNK));
+  try {
+    for(let k=0;k<n;k++){
+      const buf = await file.slice(k*CHUNK, (k+1)*CHUNK).arrayBuffer();
+      const {iv, ct} = await seal(S.dek, buf);
+      await idb.put('blobs', {id:`${id}:${k}`, vault:S.vault, iv, ct});
+      onProgress && onProgress((k+1)/n);
+    }
+  } catch(err){ for(let k=0;k<n;k++){ try { await idb.del('blobs', `${id}:${k}`); } catch {} } throw err; }
+  S.index.items.push({id, kind:'video', chunks:n, size:file.size, folder, t:Date.now(), w:info.w, h:info.h, dur:info.dur, type:file.type||'video/mp4', thumb:info.thumb, tv:2});
+}
+async function deleteItemData(it){
+  if(it.chunks){ for(let k=0;k<it.chunks;k++) await idb.del('blobs', `${it.id}:${k}`); }
+  else await idb.del('blobs', it.id);
+}
+$('#btn-import').onclick = () => pickFiles(true, files => importFiles(files, true), '#file', 'image/*,video/*');
 $('#btn-camera').onclick = () => pickFiles(false, files => importFiles(files, false), '#file-cam');
 function deleteReminder(n){
   let off = false; try { off = localStorage.getItem('myst-noremind')==='1'; } catch {}
   if(off) return;
   sheet((el, close) => {
-    el.innerHTML = `<h2>写真アプリの${n}枚を削除してください</h2>
-      <p class="hint" style="font-size:14px">MYSTに保管しましたが、元の写真は写真アプリ（カメラロール）にまだ残っています。ブラウザで動くアプリには、写真アプリの中身を消す権限がありません。</p>
-      <ol class="steps"><li>写真アプリで、いま取り込んだ写真を選んで削除</li><li>「最近削除した項目」からも削除（ここに30日間残ります）</li></ol>
+    el.innerHTML = `<h2>写真アプリの${n}件を削除してください</h2>
+      <p class="hint" style="font-size:14px">MYSTに保管しましたが、元の写真・動画は写真アプリ（カメラロール）にまだ残っています。ブラウザで動くアプリには、写真アプリの中身を消す権限がありません。</p>
+      <ol class="steps"><li>写真アプリで、いま取り込んだ写真・動画を選んで削除</li><li>「最近削除した項目」からも削除（ここに30日間残ります）</li></ol>
       <p class="hint">次からは「撮影」ボタンで撮ると、写真アプリに残さず直接MYSTに入れられます。</p>
       <label class="check"><input type="checkbox" id="rm-off">今後この案内を表示しない</label>
       <button class="btn primary wide" data-x>わかった</button>`;
@@ -700,37 +799,63 @@ function deleteReminder(n){
   });
 }
 async function importFiles(files, fromLibrary){
-  if(!files.length || !S.dek) return;
+  if(!files.length || !S.dek || !S.folder) return;
   let ok=0, ng=0;
   for(const [i,file] of files.entries()){
     busy(true, `取り込み中… ${i+1} / ${files.length}`);
     try {
-      const buf = await file.arrayBuffer();
-      const type = file.type || 'image/jpeg';
-      const bmp = await createImageBitmap(new Blob([buf], {type}));
-      await storeImage(buf, type, bmp, S.folder); bmp.close && bmp.close(); ok++;
+      const isVideo = (file.type||'').startsWith('video/') || /\.(mov|mp4|m4v|webm)$/i.test(file.name||'');
+      if(isVideo){
+        busy(true, `動画を準備中… ${i+1} / ${files.length}`);
+        const info = await videoInfo(file); if(!info) throw new Error('video');
+        await storeVideo(file, info, S.folder, p => busy(true, `動画を暗号化中… ${i+1} / ${files.length}（${Math.round(p*100)}%）`));
+        await saveIndex(); ok++;
+      } else {
+        const buf = await file.arrayBuffer();
+        const type = file.type || 'image/jpeg';
+        const bmp = await createImageBitmap(new Blob([buf], {type}));
+        await storeImage(buf, type, bmp, S.folder); bmp.close && bmp.close(); ok++;
+      }
     } catch { ng++; }
   }
   if(ok) await saveIndex();
   busy(false); renderHome();
-  toast(ng ? `${ok}枚を保管、${ng}枚は読み込めませんでした` : `${ok}枚を保管しました`);
+  toast(ng ? `${ok}件を保管、${ng}件は読み込めませんでした` : `${ok}件を保管しました`);
   if(ok && fromLibrary) deleteReminder(ok);
 }
 async function getBlob(id){
-  const r = await idb.get('blobs', id); const it = S.index.items.find(i=>i.id===id);
+  const it = S.index.items.find(i=>i.id===id);
+  if(it && it.chunks){ const parts=[]; for(let k=0;k<it.chunks;k++){ const c = await idb.get('blobs', `${id}:${k}`); parts.push(await unseal(S.dek, c.iv, c.ct)); } return new Blob(parts, {type: it.type || 'video/mp4'}); }
+  const r = await idb.get('blobs', id);
   const pt = await unseal(S.dek, r.iv, r.ct);
   return new Blob([pt], {type: (it && it.type) || 'image/jpeg'});
 }
 
 /* ---------- Viewer ---------- */
-async function openViewer(id){
+function viewList(){ const it = S.index.items.find(i=>i.id===S.viewId); return it ? itemsIn(it.folder) : []; }
+function neighbour(dir){ const l=viewList(), k=l.findIndex(i=>i.id===S.viewId); return k<0 ? null : (l[k+dir] || null); }
+function stepViewer(dir){ const n = neighbour(dir); if(!n) return false; openViewer(n.id, dir); return true; }
+async function openViewer(id, dir){
   const it = S.index.items.find(i=>i.id===id); if(!it) return;
-  S.viewId = id; Z.reset(); show('scr-view');
-  const img = $('#view-img'); img.src = it.thumb;
-  $('#view-meta').textContent = new Date(it.t).toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) + ` · ${it.w}×${it.h}`;
-  try { const u = URL.createObjectURL(await getBlob(id)); S.urls.push(u); if(S.viewId===id){ img.classList.remove('reveal'); void img.offsetWidth; img.src = u; img.classList.add('reveal'); } } catch { toast('写真を開けませんでした'); }
+  S.viewId = id; Z.reset(); stopVideo(); show('scr-view');
+  const img = $('#view-img'), vid = $('#view-video'), isV = it.kind==='video';
+  const date = new Date(it.t).toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const vl = itemsIn(it.folder), pos = `${vl.findIndex(i=>i.id===id)+1} / ${vl.length}`;
+  $('#view-meta').textContent = isV ? `${pos} · ${fmtDur(it.dur)} · ${fmtSize(it.size||0)}` : `${pos} · ${date}`;
+  const fo = S.index.folders.find(f=>f.id===it.folder); $('#va-cover').setAttribute('aria-pressed', !!fo && fo.cover===id); $('#va-cover').hidden = isV;
+  const slideEl = isV ? vid : img; slideEl.classList.remove('slide-in-l','slide-in-r'); if(dir){ void slideEl.offsetWidth; slideEl.classList.add(dir>0?'slide-in-l':'slide-in-r'); }
+  $('#va-collage').hidden = isV; $('.view-actions').style.gridTemplateColumns = isV ? 'repeat(3,1fr)' : '';
+  img.hidden = isV; vid.hidden = !isV;
+  if(isV){
+    vid.poster = it.thumb; busy(true, '動画を開いています…');
+    try { const u = URL.createObjectURL(await getBlob(id)); S.urls.push(u); if(S.viewId===id){ vid.src = u; vid.load(); } } catch { toast('動画を開けませんでした'); }
+    busy(false); return;
+  }
+  img.src = it.thumb;
+  try { const u = URL.createObjectURL(await getBlob(id)); S.urls.push(u); if(S.viewId===id){ img.src = u; if(!dir){ img.classList.remove('reveal'); void img.offsetWidth; img.classList.add('reveal'); } } } catch { toast('写真を開けませんでした'); }
 }
 /* ---------- Viewer zoom (pinch, double-tap, drag). Gestures use a fast transform; when fingers lift, the photo is laid out at its real zoomed size so it renders sharp. ---------- */
+function stopVideo(){ const v=$('#view-video'); try { v.pause(); } catch {} v.removeAttribute('src'); v.removeAttribute('poster'); v.load(); }
 const Z = (() => {
   const st=$('#view-stage'), img=$('#view-img'), badge=$('#zoom-badge'), P=new Map();
   let z=1, tx=0, ty=0, g=null, lastTap=null, badgeT, settleT;
@@ -753,16 +878,21 @@ const Z = (() => {
     if(p.length>=2) g={n:2, d0:dist(p[0],p[1])||1, m0:mid(p[0],p[1]), z, tx, ty};
     else if(p.length===1) g={n:1, p0:p[0], tx, ty, moved:false};
     else g=null; };
-  st.addEventListener('pointerdown', e => { if(e.target!==img && e.target!==st) return; st.setPointerCapture(e.pointerId); P.set(e.pointerId,{x:e.clientX,y:e.clientY}); start(); });
+  const vid=$('#view-video'); const swipeEl = () => vid.hidden ? img : vid;
+  st.addEventListener('pointerdown', e => { const onVid = e.target===vid; if(e.target!==img && e.target!==st && !onVid) return; if(!onVid){ try { st.setPointerCapture(e.pointerId); } catch {} } P.set(e.pointerId,{x:e.clientX,y:e.clientY}); start(); });
   st.addEventListener('pointermove', e => {
     if(!P.has(e.pointerId)||!g) return; P.set(e.pointerId,{x:e.clientX,y:e.clientY}); const p=[...P.values()];
     if(g.n===2 && p.length>=2){ const m=mid(p[0],p[1]); zoomAt(g.z*dist(p[0],p[1])/g.d0, g.m0, g); tx+=m.x-g.m0.x; ty+=m.y-g.m0.y; clampT(); apply(false); }
-    else if(g.n===1 && p.length===1){ const dx=p[0].x-g.p0.x, dy=p[0].y-g.p0.y; if(Math.hypot(dx,dy)>6) g.moved=true; if(z>1 && g.moved){ tx=g.tx+dx; ty=g.ty+dy; clampT(); apply(false, true); } }
+    else if(g.n===1 && p.length===1){ const dx=p[0].x-g.p0.x, dy=p[0].y-g.p0.y; if(Math.hypot(dx,dy)>6) g.moved=true; if(z>1 && g.moved){ tx=g.tx+dx; ty=g.ty+dy; clampT(); apply(false, true); } else if(z<=1.01 && g.moved && Math.abs(dx)>Math.abs(dy)){ const el=swipeEl(); el.classList.remove('snap','slide-in-l','slide-in-r'); el.style.transform=`translateX(${dx}px)`; el.style.opacity=String(1-Math.min(.5,Math.abs(dx)/600)); } }
   });
   const end = e => {
     if(!P.has(e.pointerId)) return; const wasTap = g && g.n===1 && !g.moved && P.size===1; const pt={x:e.clientX,y:e.clientY};
+    const sw = g && g.n===1 && g.moved && z<=1.01 && P.size===1 ? {dx:pt.x-g.p0.x, dy:pt.y-g.p0.y} : null;
     P.delete(e.pointerId); start();
     if(P.size) return;
+    if(sw){ const el=swipeEl(); el.style.opacity='';
+      if(Math.abs(sw.dx)>60 && Math.abs(sw.dx)>Math.abs(sw.dy)*1.2 && stepViewer(sw.dx<0?1:-1)){ el.style.transform=''; return; }
+      el.classList.add('snap'); el.style.transform=''; if(Math.abs(sw.dx)>60 && Math.abs(sw.dx)>Math.abs(sw.dy)) toast(sw.dx<0?'最後の1件です':'最初の1件です'); return; }
     if(z<1.02){ z=1; tx=0; ty=0; apply(true); }
     if(wasTap){ const now=Date.now();
       if(lastTap && now-lastTap.t<320 && dist(lastTap.p,pt)<30){ if(z>1){ z=1; tx=0; ty=0; } else zoomAt(2.5, pt); apply(true); lastTap=null; settle(260); return; }
@@ -775,27 +905,39 @@ const Z = (() => {
   window.addEventListener('resize', () => { if(z>1){ clampT(); apply(false, true); } });
   return { reset(){ z=1; tx=0; ty=0; P.clear(); g=null; lastTap=null; apply(false); } };
 })();
-$('#view-back').onclick = () => { Z.reset(); S.viewId=null; show('scr-home'); renderHome(); };
+$('#view-back').onclick = () => { Z.reset(); stopVideo(); S.viewId=null; show('scr-home'); renderHome(); };
 $('#va-move').onclick = async () => {
   const it = S.index.items.find(i=>i.id===S.viewId); if(!it) return;
-  const opts = [{label:'未分類', value:'none'}, ...S.index.folders.map(f=>({label:f.name, value:f.id})), {label:'＋ 新しいフォルダを作って移動', value:'new'}];
+  const opts = [...S.index.folders.filter(f=>f.id!==it.folder).map(f=>({label:f.name, value:f.id})), {label:'＋ 新しいフォルダを作って移動', value:'new'}];
   let v = await choose('移動先のフォルダ', opts); if(!v) return;
   if(v==='new'){ const n = await askText('新しいフォルダ', '', '作成して移動'); if(!n) return; const f={id:uid(), name:n}; S.index.folders.push(f); v=f.id; }
-  it.folder = v==='none' ? null : v; await saveIndex();
+  const from = S.index.folders.find(f=>f.id===it.folder); if(from && from.cover===it.id) from.cover=null;
+  it.folder = v; await saveIndex();
   toast(`「${folderLabel(v)}」に移動しました`);
+  if(!stepViewer(1) && !stepViewer(-1)){ Z.reset(); stopVideo(); S.viewId=null; show('scr-home'); renderHome(); }
 };
 $('#va-delete').onclick = async () => {
   const id = S.viewId; if(!id) return;
-  if(!await confirmSheet('この写真を削除しますか？', 'MYSTから完全に消え、元に戻せません。', '削除する', true)) return;
-  await idb.del('blobs', id); S.index.items = S.index.items.filter(i=>i.id!==id); await saveIndex();
-  S.viewId=null; show('scr-home'); renderHome(); toast('削除しました');
+  const it = S.index.items.find(i=>i.id===id); if(!it) return; const what = it.kind==='video' ? '動画' : '写真';
+  if(!await confirmSheet(`この${what}を削除しますか？`, 'MYSTから完全に消え、元に戻せません。', '削除する', true)) return;
+  const fo = S.index.folders.find(f=>f.id===it.folder); if(fo && fo.cover===id) fo.cover=null;
+  const nb = neighbour(1) || neighbour(-1);
+  stopVideo(); await deleteItemData(it); S.index.items = S.index.items.filter(i=>i.id!==id); await saveIndex(); toast('削除しました');
+  if(nb){ openViewer(nb.id); return; }
+  S.viewId=null; show('scr-home'); renderHome();
 };
 $('#va-export').onclick = async () => {
   const it = S.index.items.find(i=>i.id===S.viewId); if(!it) return;
   const blob = await getBlob(it.id); const u = URL.createObjectURL(blob); S.urls.push(u);
-  const ext = (it.type.split('/')[1]||'jpg').replace('jpeg','jpg');
-  const a = document.createElement('a'); a.href=u; a.download=`photo-${new Date(it.t).toISOString().slice(0,10)}.${ext}`; document.body.appendChild(a); a.click(); a.remove();
+  const ext = ({jpeg:'jpg', quicktime:'mov'})[(it.type.split('/')[1]||'jpg')] || (it.type.split('/')[1]||'jpg');
+  const a = document.createElement('a'); a.href=u; a.download=`${it.kind==='video'?'video':'photo'}-${new Date(it.t).toISOString().slice(0,10)}.${ext}`; document.body.appendChild(a); a.click(); a.remove();
   toast('書き出しを開始しました');
+};
+$('#va-cover').onclick = async () => {
+  const it = S.index.items.find(i=>i.id===S.viewId); if(!it) return;
+  const f = S.index.folders.find(x=>x.id===it.folder); if(!f) return;
+  if(f.cover===it.id){ f.cover=null; toast('表紙を元に戻しました（最新の写真）'); } else { f.cover=it.id; toast(`「${f.name}」の表紙にしました`); }
+  $('#va-cover').setAttribute('aria-pressed', f.cover===it.id); await saveIndex();
 };
 $('#va-collage').onclick = async () => {
   const id = S.viewId; if(!id) return;
@@ -803,9 +945,9 @@ $('#va-collage').onclick = async () => {
 };
 
 /* ---------- Picking a source photo ---------- */
-function pickFromVault(title){
+function pickFromVault(title, folder){
   return new Promise(res => sheet((el, close) => {
-    const list = itemsIn('all');
+    const list = itemsIn(folder||'all').filter(i=>i.kind!=='video');
     el.innerHTML = `<h2>${esc(title)}</h2>${list.length ? `<div class="pick-grid">${list.map(i=>`<button class="th" data-id="${i.id}"><img src="${i.thumb}" alt=""></button>`).join('')}</div>` : `<p class="hint">MYSTにまだ写真がありません。</p>`}<button class="btn ghost wide" data-x>やめる</button>`;
     el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => { close(); res(b.dataset.id); });
     el.querySelector('[data-x]').onclick = () => { close(); res(null); };
@@ -971,7 +1113,8 @@ $('#ed-save').onclick = async () => {
     const out=document.createElement('canvas'); out.width=E.base.width; out.height=E.base.height;
     E.composite(out.getContext('2d'));
     const blob = await new Promise(r=>out.toBlob(r,'image/jpeg',.96));
-    await storeImage(await blob.arrayBuffer(), 'image/jpeg', out, S.folder); await saveIndex();
+    busy(false); const dest = await chooseFolder('保存先のフォルダ'); if(!dest){ return; } busy(true, '暗号化して保存中…');
+    await storeImage(await blob.arrayBuffer(), 'image/jpeg', out, dest); await saveIndex(); S.folder = dest;
     E.reset(); show('scr-home'); renderHome(); toast('コラージュを保存しました');
   } catch { toast('保存できませんでした'); }
   busy(false);
@@ -1134,8 +1277,6 @@ function openSettings(){
   sheet((el, close) => {
     const ds = S.index.decoys;
     el.innerHTML = `<h2>設定</h2>
-      <div class="sect"><h3>霧</h3>
-        <div class="toggle-row"><div><div>開いたとき一覧をぼかす</div><p class="hint">人前で開いても、何の写真か分からないようにします。右上の霧ボタンでいつでも切り替えられます。</p></div><button class="switch" role="switch" id="st-fog" aria-checked="${fogPref()}" aria-label="開いたとき一覧をぼかす"></button></div></div>
       <div class="sect"><h3>パスコード</h3><button class="btn" id="st-pass">パスコードを変更</button></div>
       <div class="sect"><h3>偽パスコード</h3>
         <p class="hint">別の番号を入れたとき、本当の金庫の代わりに他のサイトやダミーの金庫を開きます。</p>
@@ -1147,7 +1288,6 @@ function openSettings(){
       <p class="hint">画面を離れると自動でロックします。</p>
       <button class="btn ghost wide" data-x>閉じる</button>`;
     el.querySelector('[data-x]').onclick = close;
-    el.querySelector('#st-fog').onclick = e => { const on = e.currentTarget.getAttribute('aria-checked')!=='true'; e.currentTarget.setAttribute('aria-checked', on); try { localStorage.setItem('myst-fog', on?'on':'off'); } catch {} S.fog = on; renderHome(); };
     el.querySelector('#st-pass').onclick =async () => { close(); await changePass(); };
     el.querySelector('#st-add').onclick = async () => { close(); await addDecoy(); };
     el.querySelector('#st-export').onclick = () => { close(); exportBackup(); };
