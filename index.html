@@ -636,6 +636,17 @@ const veil = $('#veil');
 const cover = () => { if(S.picking) return; veil.hidden = false; };
 const uncover = () => { if(!document.hidden && !S.lockPending) veil.hidden = true; };
 window.addEventListener('blur', cover);
+/* iOS takes the app-switcher snapshot before the page can react to leaving, so cover the screen
+   as soon as a finger lands on the top or bottom edge (where the system swipe gestures start).
+   A normal tap there lifts the fog again; a touch anywhere else also lifts it. */
+let edgeTouch = false;
+document.addEventListener('touchstart', e => {
+  const t = e.touches[0]; if(!t) return; const H = window.innerHeight;
+  if(t.clientY > H - 40 || t.clientY < 28){ edgeTouch = true; veil.hidden = false; }
+  else if(!S.lockPending && !document.hidden) veil.hidden = true;
+}, {passive:true, capture:true});
+document.addEventListener('touchend', () => { if(edgeTouch){ edgeTouch = false; if(!S.lockPending) veil.hidden = true; } }, {passive:true, capture:true});
+document.addEventListener('touchcancel', () => { edgeTouch = false; }, {passive:true, capture:true});
 window.addEventListener('pagehide', cover);
 document.addEventListener('freeze', cover);
 window.addEventListener('focus', uncover);
