@@ -106,6 +106,9 @@ button{cursor:pointer}
 .folders::-webkit-scrollbar{display:none}
 .chip{flex:none;border:1px solid var(--line);background:var(--surface);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;padding:6px 15px;min-height:36px;white-space:nowrap;font-size:13.5px}
 .chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);box-shadow:0 6px 18px rgba(var(--mist-rgb),.45)}
+.sheet .folders{position:sticky;top:-20px;z-index:1;background:var(--solid);margin-inline:calc(-1 * var(--gut-l)) calc(-1 * var(--gut-r));padding-inline:var(--gut-l) var(--gut-r);padding-block:8px}
+.chip .count{margin-left:6px}
+.chip[aria-pressed="true"] .count{color:inherit;opacity:.75}
 .chip.add{border-style:dashed;color:var(--muted);background:transparent}
 .folder-head{display:flex;align-items:center;justify-content:space-between;gap:4px;padding-block:2px 10px;flex:none;min-height:48px}
 .fh-left{display:flex;align-items:center;gap:2px;min-width:0}
@@ -1067,12 +1070,30 @@ $('#va-collage').onclick = async () => {
 };
 
 /* ---------- Picking a source photo ---------- */
+let lastPickFolder = null;
 function pickFromVault(title, folder){
   return new Promise(res => sheet((el, close) => {
-    const list = itemsIn(folder||'all').filter(i=>i.kind!=='video');
-    el.innerHTML = `<h2>${esc(title)}</h2>${list.length ? `<div class="pick-grid">${list.map(i=>`<button class="th" data-id="${i.id}"><img src="${i.thumb}" alt=""></button>`).join('')}</div>` : `<p class="hint">MYSTにまだ写真がありません。</p>`}<button class="btn ghost wide" data-x>やめる</button>`;
-    el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => { close(); res(b.dataset.id); });
-    el.querySelector('[data-x]').onclick = () => { close(); res(null); };
+    if(folder){ // fixed folder (e.g. choosing a cover)
+      const list = itemsIn(folder).filter(i=>i.kind!=='video');
+      el.innerHTML = `<h2>${esc(title)}</h2>${list.length ? `<div class="pick-grid">${list.map(i=>`<button class="th" data-id="${i.id}"><img src="${i.thumb}" alt=""></button>`).join('')}</div>` : `<p class="hint">このフォルダに写真がありません。</p>`}<button class="btn ghost wide" data-x>やめる</button>`;
+      el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => { close(); res(b.dataset.id); });
+      el.querySelector('[data-x]').onclick = () => { close(); res(null); };
+      return;
+    }
+    const folders = S.index.folders.filter(f=>itemsIn(f.id).some(i=>i.kind!=='video'));
+    let cur = [lastPickFolder, S.folder].find(id => folders.some(f=>f.id===id)) || (folders[0] && folders[0].id);
+    const paint = () => {
+      const list = cur ? itemsIn(cur).filter(i=>i.kind!=='video') : [];
+      el.innerHTML = `<h2>${esc(title)}</h2>
+        ${folders.length ? `<div class="folders" role="tablist">${folders.map(f=>`<button class="chip" data-f="${esc(f.id)}" aria-pressed="${f.id===cur}">${esc(f.name)}<span class="count">${itemsIn(f.id).filter(i=>i.kind!=='video').length}</span></button>`).join('')}</div>` : ''}
+        ${list.length ? `<div class="pick-grid">${list.map(i=>`<button class="th" data-id="${i.id}"><img src="${i.thumb}" alt="" loading="lazy"></button>`).join('')}</div>` : `<p class="hint">MYSTにまだ写真がありません。</p>`}
+        <button class="btn ghost wide" data-x>やめる</button>`;
+      el.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { cur = b.dataset.f; paint(); el.scrollTop = 0; });
+      el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => { lastPickFolder = cur; close(); res(b.dataset.id); });
+      el.querySelector('[data-x]').onclick = () => { close(); res(null); };
+      const on = el.querySelector('.chip[aria-pressed="true"]'); on && on.scrollIntoView({inline:'center', block:'nearest'});
+    };
+    paint();
   }, () => res(null)));
 }
 async function pickSource(title){
