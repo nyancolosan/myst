@@ -194,6 +194,8 @@ button{cursor:pointer}
 .layer-chip canvas,.layer-chip img{width:34px;height:34px;border-radius:8px;object-fit:cover;background:var(--chk1)}
 .layer-chip[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .layer-chip.add{border-style:dashed;color:var(--muted);padding:4px 12px;background:transparent}
+.stamp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px}
+.stamp-grid button{font-size:30px;height:56px;border:1px solid var(--line);border-radius:14px;background:var(--surface);font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
 .t-ico{width:34px;height:34px;border-radius:8px;background:var(--sunk);display:grid;place-items:center;font-family:var(--f-display);font-size:15px}
 .swatches{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .sw{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);padding:0}
@@ -287,7 +289,7 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
     <div class="view-actions gut">
       <button class="va" id="va-move"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M10 13h6M13 10l3 3-3 3"/></svg>移動</button>
       <button class="va" id="va-cover" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></svg>表紙</button>
-      <button class="va" id="va-collage"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="2"/><rect x="9" y="9" width="12" height="12" rx="2"/></svg>土台にする</button>
+      <button class="va" id="va-collage"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="2"/><rect x="9" y="9" width="12" height="12" rx="2"/></svg><span id="va-collage-l">土台にする</span></button>
       <button class="va" id="va-export"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 19h16"/></svg>書き出し</button>
       <button class="va danger" id="va-delete"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>削除</button>
     </div>
@@ -311,16 +313,29 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
       <div class="layers" id="ed-layers"></div>
       <div id="ed-tools" class="sect" hidden>
         <div class="row">
-          <button class="btn primary" id="ed-cut">切り抜き・背景透過</button>
+          <button class="btn primary" id="ed-cut">切り抜き</button>
+          <button class="btn primary" id="ed-face">顔を合わせる</button>
           <button class="btn" id="ed-front">前面へ</button>
           <button class="btn ghost danger" id="ed-remove">外す</button>
         </div>
         <label class="slider" for="ed-s">大きさ<input type="range" id="ed-s" min="5" max="300" value="50"><output id="ed-s-o">50%</output></label>
         <label class="slider" for="ed-r">回転<input type="range" id="ed-r" min="-180" max="180" value="0"><output id="ed-r-o">0°</output></label>
         <label class="slider" for="ed-o">不透明度<input type="range" id="ed-o" min="10" max="100" value="100"><output id="ed-o-o">100%</output></label>
-        <p class="hint">写真の上で指1本で移動、2本でサイズと角度を変えられます。</p>
+        <p class="hint" id="ed-tip">写真の上で指1本で移動、2本でサイズと角度を変えられます。</p>
       </div>
-      <p class="hint" id="ed-hint-b">「＋ 写真B」で重ねる写真、「＋ テキスト」で文字を追加します。</p>
+      <div id="ed-draw" class="sect" hidden>
+        <div class="seg" id="dr-mode">
+          <button data-m="pen" aria-pressed="true">ペン</button>
+          <button data-m="erase" aria-pressed="false">消しゴム</button>
+          <button data-m="mosaic" aria-pressed="false">モザイク</button>
+          <button data-m="blur" aria-pressed="false">ぼかし</button>
+        </div>
+        <div class="swatches" id="dr-color"></div>
+        <label class="slider" for="dr-size">太さ<input type="range" id="dr-size" min="4" max="90" value="16"><output id="dr-size-o">16</output></label>
+        <div class="row"><button class="btn" id="dr-undo" disabled>1つ戻す</button><button class="btn ghost danger" id="dr-remove">この手書きを外す</button></div>
+        <p class="hint" id="dr-hint">写真の上を指でなぞって描きます。</p>
+      </div>
+      <p class="hint" id="ed-hint-b">「＋」から写真B・テキスト・スタンプ・手書きを重ねられます。</p>
     </div>
   </section>
 
@@ -334,12 +349,20 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
     <div class="stage checker" id="cut-stage"><canvas id="cut-cv"></canvas></div>
     <div class="panel gut frost">
       <div class="seg" id="cut-tools">
-        <button data-tool="wand" aria-pressed="true">背景を消す</button>
+        <button data-tool="ai" aria-pressed="true">AIで切り抜き</button>
+        <button data-tool="wand" aria-pressed="false">背景を消す</button>
         <button data-tool="lasso" aria-pressed="false">囲んで切り抜く</button>
         <button data-tool="erase" aria-pressed="false">消しゴム</button>
         <button data-tool="restore" aria-pressed="false">復元</button>
       </div>
-      <div id="opt-wand" class="sect">
+      <div id="opt-ai" class="sect">
+        <div class="seg" id="ai-mode">
+          <button data-mode="keep" aria-pressed="true">タップしたものを残す</button>
+          <button data-mode="remove" aria-pressed="false">タップしたものを消す</button>
+        </div>
+        <p class="hint">人や物をタップすると、AIが輪郭を見分けて切り抜きます。処理はこの端末の中だけで行います。初回だけAIの準備に少し時間がかかります。</p>
+      </div>
+      <div id="opt-wand" class="sect" hidden>
         <label class="slider" for="cut-tol">近い色の範囲<input type="range" id="cut-tol" min="4" max="80" value="24"><output id="cut-tol-o">24</output></label>
         <label class="check"><input type="checkbox" id="cut-global">離れた場所の同じ色もまとめて消す</label>
         <p class="hint">消したい背景をタップ。2本指で拡大・移動できます。</p>
@@ -837,6 +860,7 @@ async function storeVideo(file, info, folder, onProgress){
 async function deleteItemData(it){
   if(it.chunks){ for(let k=0;k<it.chunks;k++) await idb.del('blobs', `${it.id}:${k}`); }
   else await idb.del('blobs', it.id);
+  if(it.proj) await idb.del('blobs', `${it.id}:proj`);
 }
 $('#btn-import').onclick = () => pickFiles(true, files => importFiles(files, true), '#file', 'image/*,video/*');
 $('#btn-camera').onclick = () => pickFiles(false, files => importFiles(files, false), '#file-cam');
@@ -922,6 +946,7 @@ async function openViewer(id, dir){
   $('#view-meta').textContent = isV ? `${pos} · ${fmtDur(it.dur)} · ${fmtSize(it.size||0)}` : `${pos} · ${date}`;
   const fo = S.index.folders.find(f=>f.id===it.folder); $('#va-cover').setAttribute('aria-pressed', !!fo && fo.cover===id); $('#va-cover').hidden = isV;
   const slideEl = isV ? vid : img; slideEl.classList.remove('slide-in-l','slide-in-r'); if(dir){ void slideEl.offsetWidth; slideEl.classList.add(dir>0?'slide-in-l':'slide-in-r'); }
+  $('#va-collage-l').textContent = it.proj ? '編集' : '土台にする';
   $('#va-collage').hidden = isV; $('.view-actions').style.gridTemplateColumns = isV ? 'repeat(3,1fr)' : '';
   img.hidden = isV; vid.hidden = !isV;
   if(isV){
@@ -1019,6 +1044,8 @@ $('#va-cover').onclick = async () => {
 };
 $('#va-collage').onclick = async () => {
   const id = S.viewId; if(!id) return;
+  const pit = S.index.items.find(i=>i.id===id);
+  if(pit && pit.proj){ busy(true, '編集データを開いています…'); try { await loadProject(id); } catch(err){ showError('編集データを開けませんでした', err); } busy(false); return; }
   busy(true); try { const bmp = await decodeImage(await getBlob(id)); E.open(); E.setBase(bmp); } catch { toast('写真を開けませんでした'); } busy(false);
 };
 
@@ -1040,10 +1067,10 @@ async function pickSource(title){
 
 /* ---------- Collage editor ---------- */
 const E = {
-  base:null, layers:[], active:-1, k:1, ox:0, oy:0,
-  reset(){ this.base=null; this.layers=[]; this.active=-1; },
+  base:null, layers:[], active:-1, k:1, ox:0, oy:0, editingId:null,
+  reset(){ this.base=null; this.layers=[]; this.active=-1; this.editingId=null; D.undo=[]; },
   open(){ this.reset(); show('scr-edit'); this.refresh(); requestAnimationFrame(()=>this.layout()); },
-  setBase(bmp){ this.base = canvasFrom(bmp, 4032); bmp.close && bmp.close(); this.refresh(); this.layout(); },
+  setBase(bmp){ this._baseT = null; this.base = canvasFrom(bmp, 4032); bmp.close && bmp.close(); this.refresh(); this.layout(); },
   addLayer(bmp){
     const src = canvasFrom(bmp, 2400); bmp.close && bmp.close();
     const orig = document.createElement('canvas'); orig.width=src.width; orig.height=src.height; orig.getContext('2d').drawImage(src,0,0);
@@ -1057,6 +1084,16 @@ const E = {
     L.s = Math.min(this.base.height*0.09/TEXT_PX, this.base.width*0.8/L.src.width);
     this.layers.push(L); this.active = this.layers.length-1; this.refresh(); this.draw();
   },
+  addStamp(ch){
+    const L = {type:'stamp', ch, x:this.base.width/2, y:this.base.height/2, r:0, o:1}; renderStamp(L);
+    L.s = Math.min(this.base.width, this.base.height)*0.22/L.src.width;
+    this.layers.push(L); this.active = this.layers.length-1; this.refresh(); this.draw();
+  },
+  addDraw(){
+    const c = document.createElement('canvas'); c.width=this.base.width; c.height=this.base.height;
+    this.layers.push({type:'draw', src:c, orig:c, x:c.width/2, y:c.height/2, s:1, r:0, o:1});
+    this.active = this.layers.length-1; this.refresh(); this.draw(); toast('写真の上をなぞって描けます');
+  },
   get L(){ return this.layers[this.active] || null; },
   layout(){
     const st=$('#ed-stage'), cv=$('#ed-cv'), w=st.clientWidth, h=st.clientHeight, dpr=window.devicePixelRatio||1;
@@ -1064,9 +1101,9 @@ const E = {
     if(this.base){ this.k = Math.min(w/this.base.width, h/this.base.height) * 0.94; this.ox=(w-this.base.width*this.k)/2; this.oy=(h-this.base.height*this.k)/2; }
     this.draw();
   },
-  composite(ctx){
+  composite(ctx, upto=Infinity){
     ctx.drawImage(this.base, 0, 0);
-    for(const L of this.layers){ ctx.save(); ctx.globalAlpha=L.o; ctx.translate(L.x,L.y); ctx.rotate(L.r); ctx.scale(L.s,L.s); ctx.drawImage(L.src,-L.src.width/2,-L.src.height/2); ctx.restore(); }
+    for(const L of this.layers.slice(0, upto)){ ctx.save(); ctx.globalAlpha=L.o; ctx.translate(L.x,L.y); ctx.rotate(L.r); ctx.scale(L.s,L.s); ctx.drawImage(L.src,-L.src.width/2,-L.src.height/2); ctx.restore(); }
   },
   draw(){
     const cv=$('#ed-cv'), ctx=cv.getContext('2d'), dpr=window.devicePixelRatio||1;
@@ -1074,7 +1111,7 @@ const E = {
     if(!this.base) return;
     ctx.setTransform(dpr,0,0,dpr,0,0); ctx.translate(this.ox,this.oy); ctx.scale(this.k,this.k);
     ctx.save(); ctx.beginPath(); ctx.rect(0,0,this.base.width,this.base.height); ctx.clip(); this.composite(ctx); ctx.restore();
-    const L=this.L; if(L){
+    const L=this.L; if(L && L.type!=='draw'){
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e3583b';
       ctx.save(); ctx.translate(L.x,L.y); ctx.rotate(L.r); ctx.scale(L.s,L.s);
       const u = 1/(this.k*L.s); ctx.lineWidth=1.6*u; ctx.setLineDash([6*u,4*u]); ctx.strokeStyle=accent;
@@ -1085,25 +1122,36 @@ const E = {
     const has = !!this.base;
     $('#ed-empty').hidden = has; $('#ed-panel').hidden = !has; $('#ed-save').disabled = !has;
     if(!has) return;
-    const chips = [`<button class="layer-chip" data-l="base" aria-pressed="${this.active===-1}"><img src="${thumbOf(this.base)}" alt="">写真A</button>`]
-      .concat(this.layers.map((L,i)=> L.type==='text'
-        ? `<button class="layer-chip" data-l="${i}" aria-pressed="${i===this.active}"><span class="t-ico" aria-hidden="true">T</span>${esc(L.text.split('\n')[0].slice(0,8))}</button>`
-        : `<button class="layer-chip" data-l="${i}" aria-pressed="${i===this.active}"><img src="${L.src.toDataURL('image/png')}" alt="">写真B</button>`))
-      .concat(`<button class="layer-chip add" data-l="add">＋ 写真B</button>`, `<button class="layer-chip add" data-l="text">＋ テキスト</button>`);
+    if(!this._baseT) this._baseT = thumbOf(this.base);
+    const chip = (i, inner) => `<button class="layer-chip" data-l="${i}" aria-pressed="${i===this.active}">${inner}</button>`;
+    const chips = [chip('base', `<img src="${this._baseT}" alt="">写真A`)]
+      .concat(this.layers.map((L,i)=> {
+        if(L.type==='text') return chip(i, `<span class="t-ico" aria-hidden="true">T</span>${esc(L.text.split('\n')[0].slice(0,8))}`);
+        if(L.type==='stamp') return chip(i, `<span class="t-ico" aria-hidden="true">${esc(L.ch)}</span>スタンプ`);
+        if(L.type==='draw') return chip(i, `<span class="t-ico" aria-hidden="true">✎</span>手書き`);
+        if(!L._t) L._t = canvasFrom(L.src, 72).toDataURL('image/png');
+        return chip(i, `<img src="${L._t}" alt="">${L.face?'顔':'写真B'}`);
+      }))
+      .concat(['add:＋ 写真B','text:＋ テキスト','stamp:＋ スタンプ','draw:＋ 手書き'].map(x=>{ const [k,t]=x.split(':'); return `<button class="layer-chip add" data-l="${k}">${t}</button>`; }));
     $('#ed-layers').innerHTML = chips.join('');
-    $('#ed-tools').hidden = !this.L; $('#ed-hint-b').hidden = !!this.layers.length;
-    if(this.L) $('#ed-cut').textContent = this.L.type==='text' ? 'テキストを編集' : '切り抜き・背景透過';
+    const L = this.L, isDraw = !!L && L.type==='draw';
+    $('#ed-tools').hidden = !L || isDraw; $('#ed-draw').hidden = !isDraw; $('#ed-hint-b').hidden = !!this.layers.length;
+    if(L && !isDraw){
+      $('#ed-cut').hidden = L.type==='stamp'; $('#ed-cut').textContent = L.type==='text' ? 'テキストを編集' : '切り抜き';
+      $('#ed-face').hidden = L.type!=='img';
+    }
+    if(isDraw) D.sync();
     this.syncSliders();
   },
   syncSliders(){
-    const L=this.L; if(!L) return;
+    const L=this.L; if(!L || L.type==='draw') return;
     const sz = Math.round(L.s*L.src.width/this.base.width*100), rot = Math.round(L.r*180/Math.PI), op = Math.round(L.o*100);
     $('#ed-s').value=sz; $('#ed-s-o').textContent=sz+'%';
     $('#ed-r').value=((rot+540)%360)-180; $('#ed-r-o').textContent=(((rot+540)%360)-180)+'°';
     $('#ed-o').value=op; $('#ed-o-o').textContent=op+'%';
   },
   hit(px,py){
-    for(let i=this.layers.length-1;i>=0;i--){ const L=this.layers[i];
+    for(let i=this.layers.length-1;i>=0;i--){ const L=this.layers[i]; if(L.type==='draw') continue;
       let dx=(px-this.ox)/this.k-L.x, dy=(py-this.oy)/this.k-L.y; const c=Math.cos(-L.r), s=Math.sin(-L.r);
       const lx=(dx*c-dy*s)/L.s, ly=(dx*s+dy*c)/L.s;
       if(Math.abs(lx)<=L.src.width/2 && Math.abs(ly)<=L.src.height/2) return i; }
@@ -1115,6 +1163,8 @@ $('#ed-layers').addEventListener('click', async e => {
   const b = e.target.closest('[data-l]'); if(!b) return; const l=b.dataset.l;
   if(l==='add'){ const bmp = await pickSource('重ねる写真Bを選ぶ'); if(bmp) E.addLayer(bmp); return; }
   if(l==='text'){ const t = await textEditor(null); if(t){ busy(true); await E.addText(t); busy(false); } return; }
+  if(l==='stamp'){ const ch = await stampPicker(); if(ch) E.addStamp(ch); return; }
+  if(l==='draw'){ E.addDraw(); return; }
   if(l==='base'){
     if(E.active!==-1){ E.active=-1; E.refresh(); E.draw(); return; }
     const bmp = await pickSource('写真A（土台）を変更'); if(bmp){ E.setBase(bmp); } return;
@@ -1125,6 +1175,7 @@ $('#ed-s').oninput = e => { const L=E.L; if(!L) return; L.s = (+e.target.value/1
 $('#ed-r').oninput = e => { const L=E.L; if(!L) return; L.r = +e.target.value*Math.PI/180; E.syncSliders(); E.draw(); };
 $('#ed-o').oninput = e => { const L=E.L; if(!L) return; L.o = +e.target.value/100; E.syncSliders(); E.draw(); };
 $('#ed-front').onclick = () => { const L=E.L; if(!L) return; E.layers.splice(E.active,1); E.layers.push(L); E.active=E.layers.length-1; E.refresh(); E.draw(); };
+$('#ed-face').onclick = () => faceCompose();
 $('#ed-remove').onclick = () => { if(!E.L) return; E.layers.splice(E.active,1); E.active=E.layers.length-1; E.refresh(); E.draw(); };
 $('#ed-cut').onclick = async () => {
   const L = E.L; if(!L) return;
@@ -1185,16 +1236,34 @@ $('#ed-close').onclick = async () => {
   if(E.base && !await confirmSheet('コラージュを閉じますか？', '保存していない編集は失われます。', '閉じる', true)) return;
   E.reset(); show('scr-home'); renderHome();
 };
+async function putProject(id, bytes){ const {iv, ct} = await seal(S.dek, bytes); await idb.put('blobs', {id:`${id}:proj`, vault:S.vault, iv, ct}); }
 $('#ed-save').onclick = async () => {
-  if(!E.base) return; busy(true, '暗号化して保存中…');
+  if(!E.base) return; busy(true, '保存の準備中…');
   try {
     const out=document.createElement('canvas'); out.width=E.base.width; out.height=E.base.height;
     E.composite(out.getContext('2d'));
     const blob = await new Promise(r=>out.toBlob(r,'image/jpeg',.96));
-    busy(false); const dest = await chooseFolder('保存先のフォルダ'); if(!dest){ return; } busy(true, '暗号化して保存中…');
-    await storeImage(await blob.arrayBuffer(), 'image/jpeg', out, dest); await saveIndex(); S.folder = dest;
-    E.reset(); show('scr-home'); renderHome(); toast('コラージュを保存しました');
-  } catch { toast('保存できませんでした'); }
+    const proj = await serializeProject();
+    const old = E.editingId && S.index.items.find(i=>i.id===E.editingId);
+    let dest, overwrite = false;
+    busy(false);
+    if(old){
+      const v = await choose('保存のしかた', [{label:'上書き保存', value:'over', sub:'元のコラージュを置き換えます'}, {label:'新しい写真として保存', value:'new', sub:'元のコラージュも残ります'}]);
+      if(!v) return; overwrite = v==='over'; dest = old.folder;
+    } else { dest = await chooseFolder('保存先のフォルダ'); if(!dest) return; }
+    busy(true, '暗号化して保存中…');
+    if(overwrite){
+      const {iv, ct} = await seal(S.dek, await blob.arrayBuffer());
+      await idb.put('blobs', {id:old.id, vault:S.vault, iv, ct});
+      await putProject(old.id, proj);
+      Object.assign(old, {type:'image/jpeg', w:out.width, h:out.height, thumb:thumbOf(out), tv:2, proj:true});
+    } else {
+      const id = await storeImage(await blob.arrayBuffer(), 'image/jpeg', out, dest);
+      await putProject(id, proj); S.index.items.find(i=>i.id===id).proj = true;
+    }
+    await saveIndex(); S.folder = dest;
+    E.reset(); show('scr-home'); renderHome(); toast(overwrite ? '上書き保存しました' : 'コラージュを保存しました（あとから「編集」で直せます）');
+  } catch(err){ showError('保存できませんでした', err); }
   busy(false);
 };
 (() => { // editor gestures
@@ -1205,34 +1274,223 @@ $('#ed-save').onclick = async () => {
     if(p.length===1) g={n:1,p0:p[0],x:L.x,y:L.y};
     else if(p.length>=2) g={n:2,d0:dist(p[0],p[1])||1,a0:ang(p[0],p[1]),c0:mid(p[0],p[1]),s:L.s,r:L.r,x:L.x,y:L.y};
     else g=null; };
+  const toBase = p => ({x:(p.x-E.ox)/E.k, y:(p.y-E.oy)/E.k});
   cv.addEventListener('pointerdown', e => {
-    if(!E.base) return; cv.setPointerCapture(e.pointerId); const p=pt(e); P.set(e.pointerId,p);
+    if(!E.base) return; try { cv.setPointerCapture(e.pointerId); } catch {} const p=pt(e); P.set(e.pointerId,p);
+    if(E.L && E.L.type==='draw'){ if(P.size===1) D.begin(toBase(p)); else D.cancel(); return; }
     if(P.size===1){ const h=E.hit(p.x,p.y); if(h!==-1 && h!==E.active){ E.active=h; E.refresh(); E.draw(); } }
     start();
   });
   cv.addEventListener('pointermove', e => {
-    if(!P.has(e.pointerId)) return; P.set(e.pointerId, pt(e)); const L=E.L; if(!L||!g) return; const p=[...P.values()];
+    if(!P.has(e.pointerId)) return; P.set(e.pointerId, pt(e));
+    if(D.active){ D.to(toBase(pt(e))); return; }
+    const L=E.L; if(!L||!g||L.type==='draw') return; const p=[...P.values()];
     if(g.n===1 && p.length===1){ L.x=g.x+(p[0].x-g.p0.x)/E.k; L.y=g.y+(p[0].y-g.p0.y)/E.k; }
     else if(g.n===2 && p.length>=2){ L.s=clamp(g.s*dist(p[0],p[1])/g.d0, 0.01, 50); L.r=g.r+ang(p[0],p[1])-g.a0; const c=mid(p[0],p[1]); L.x=g.x+(c.x-g.c0.x)/E.k; L.y=g.y+(c.y-g.c0.y)/E.k; }
     E.syncSliders(); E.draw();
   });
-  const end = e => { P.delete(e.pointerId); start(); };
+  const end = e => { P.delete(e.pointerId); if(D.active && !P.size) D.end(); start(); };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
 })();
 
+/* ---------- Editable projects ---------- */
+async function canvasB64(c, type, q){ const blob = await new Promise(r=>c.toBlob(r, type, q)); return b64(new Uint8Array(await blob.arrayBuffer())); }
+async function b64Canvas(str, type){
+  const img = await decodeImage(new Blob([unb64(str)], {type})); const d = dimsOf(img);
+  const c = document.createElement('canvas'); c.width=d.w; c.height=d.h; c.getContext('2d').drawImage(img,0,0); img.close && img.close(); return c;
+}
+async function serializeProject(){
+  const p = {v:1, base: await canvasB64(E.base,'image/jpeg',.95), layers:[]};
+  for(const L of E.layers){
+    const o = {type:L.type, x:L.x, y:L.y, s:L.s, r:L.r, o:L.o};
+    if(L.type==='text') Object.assign(o, {text:L.text, font:L.font, color:L.color, style:L.style});
+    else if(L.type==='stamp') o.ch = L.ch;
+    else if(L.type==='draw') o.src = await canvasB64(L.src,'image/png');
+    else { o.src = await canvasB64(L.src,'image/png'); o.orig = await canvasB64(L.orig,'image/jpeg',.92); o.face = !!L.face; }
+    p.layers.push(o);
+  }
+  return TE.encode(JSON.stringify(p));
+}
+async function loadProject(id){
+  const r = await idb.get('blobs', `${id}:proj`); if(!r) throw new Error('編集データが見つかりません');
+  const p = JSON.parse(TD.decode(await unseal(S.dek, r.iv, r.ct)));
+  E.reset(); E._baseT = null; E.base = await b64Canvas(p.base, 'image/jpeg');
+  for(const o of p.layers){
+    const L = {...o};
+    if(o.type==='text') await renderText(L);
+    else if(o.type==='stamp') renderStamp(L);
+    else if(o.type==='draw'){ L.src = await b64Canvas(o.src,'image/png'); L.orig = L.src; }
+    else { L.src = await b64Canvas(o.src,'image/png'); L.orig = o.orig ? await b64Canvas(o.orig,'image/jpeg') : L.src; }
+    E.layers.push(L);
+  }
+  E.editingId = id; E.active = -1; stopVideo(); show('scr-edit'); E.refresh(); requestAnimationFrame(()=>E.layout());
+}
+
+/* ---------- Stamps ---------- */
+const STAMPS = ['❤️','💕','💖','⭐','✨','🌟','👑','🎀','🌸','🌷','🦋','🔥','💋','😘','🥰','😍','😂','🤍','💯','👍','✌️','🐱','🐶','🐰','🌙','☁️','🌈','🍓','🎉','💎'];
+function renderStamp(L){
+  const N=240, c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
+  x.font = `${N*0.8}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; x.textAlign='center'; x.textBaseline='middle';
+  x.fillText(L.ch, N/2, N*0.54); L.src = c; L.orig = c;
+}
+function stampPicker(){
+  return new Promise(res => sheet((el, close) => {
+    el.innerHTML = `<h2>スタンプを選ぶ</h2><div class="stamp-grid">${STAMPS.map(c=>`<button data-c="${c}" aria-label="${c}">${c}</button>`).join('')}</div><button class="btn ghost wide" data-x>やめる</button>`;
+    el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { close(); res(b.dataset.c); });
+    el.querySelector('[data-x]').onclick = () => { close(); res(null); };
+  }, () => res(null)));
+}
+
+/* ---------- Drawing layer: pen, eraser, mosaic, blur ---------- */
+const D = {
+  mode:'pen', color:'#ffffff', size:16, active:false, last:null, fx:null, undo:[],
+  sync(){
+    document.querySelectorAll('#dr-mode [data-m]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.m===this.mode));
+    const sw = $('#dr-color');
+    if(!sw.childElementCount) sw.innerHTML = SWATCHES.map(c=>`<button class="sw" data-v="${c}" aria-label="${c}" style="background:${c}"></button>`).join('') + `<input type="color" class="sw-custom" id="dr-custom" value="#ffffff" aria-label="ほかの色">`;
+    sw.querySelectorAll('[data-v]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===this.color));
+    sw.hidden = this.mode!=='pen';
+    $('#dr-undo').disabled = !this.undo.some(u=>u.L===E.L);
+    $('#dr-hint').textContent = {pen:'写真の上を指でなぞって描きます。', erase:'なぞった手書きを消します。', mosaic:'なぞった部分にモザイクをかけます。', blur:'なぞった部分をぼかします。'}[this.mode];
+  },
+  begin(p){
+    const L=E.L; if(!L) return;
+    const snap=document.createElement('canvas'); snap.width=L.src.width; snap.height=L.src.height; snap.getContext('2d').drawImage(L.src,0,0);
+    this.undo.push({L, snap}); if(this.undo.length>3) this.undo.shift();
+    if(this.mode==='mosaic' || this.mode==='blur') this.fx = this.makeFx();
+    this.active=true; this.last=p; this.dab(p,p);
+  },
+  to(p){ if(!this.active) return; this.dab(this.last,p); this.last=p; },
+  end(){ this.active=false; this.fx=null; this.sync(); },
+  cancel(){ if(!this.active) return; this.active=false; this.fx=null; this.popUndo(); },
+  popUndo(){ for(let i=this.undo.length-1;i>=0;i--){ if(this.undo[i].L===E.L){ const {L,snap}=this.undo.splice(i,1)[0]; const x=L.src.getContext('2d'); x.clearRect(0,0,L.src.width,L.src.height); x.drawImage(snap,0,0); break; } } E.draw(); this.sync(); },
+  makeFx(){
+    const W=E.base.width, H=E.base.height, blk = this.mode==='mosaic' ? Math.max(8, Math.round(Math.max(W,H)/55)) : Math.max(6, Math.round(Math.max(W,H)/70));
+    const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(W/blk)); c.height=Math.max(1,Math.round(H/blk));
+    const x=c.getContext('2d'); x.scale(c.width/W, c.height/H); E.composite(x, E.active); return c;
+  },
+  dab(a,b){
+    const L=E.L, x=L.src.getContext('2d'), w=Math.max(1, this.size/E.k);
+    x.save(); x.lineCap='round'; x.lineJoin='round'; x.lineWidth=w;
+    if(this.mode==='pen' || this.mode==='erase'){
+      if(this.mode==='erase') x.globalCompositeOperation='destination-out';
+      x.strokeStyle=this.color; x.beginPath(); x.moveTo(a.x,a.y); x.lineTo(b.x+.01,b.y); x.stroke();
+    } else if(this.fx){
+      const r=w/2, n=Math.max(1, Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/(r*.5)));
+      x.beginPath(); for(let i=0;i<=n;i++){ const px=a.x+(b.x-a.x)*i/n, py=a.y+(b.y-a.y)*i/n; x.moveTo(px+r,py); x.arc(px,py,r,0,Math.PI*2); }
+      x.clip(); x.imageSmoothingEnabled = this.mode==='blur'; x.drawImage(this.fx, 0, 0, L.src.width, L.src.height);
+    }
+    x.restore(); E.draw();
+  },
+};
+document.querySelectorAll('#dr-mode [data-m]').forEach(b => b.onclick = () => { D.mode=b.dataset.m; if(D.mode==='pen' || D.mode==='erase') D.size = D.mode==='pen' ? 16 : 30; else D.size = 40; $('#dr-size').value=D.size; $('#dr-size-o').textContent=D.size; D.sync(); });
+$('#dr-color').addEventListener('click', e => { const b=e.target.closest('[data-v]'); if(!b) return; D.color=b.dataset.v; D.sync(); });
+$('#dr-color').addEventListener('input', e => { if(e.target.id==='dr-custom'){ D.color=e.target.value; D.sync(); } });
+$('#dr-size').oninput = e => { D.size=+e.target.value; $('#dr-size-o').textContent=D.size; };
+$('#dr-undo').onclick = () => D.popUndo();
+$('#dr-remove').onclick = () => { if(!E.L || E.L.type!=='draw') return; D.undo = D.undo.filter(u=>u.L!==E.L); E.layers.splice(E.active,1); E.active=E.layers.length-1; E.refresh(); E.draw(); };
+
+/* ---------- On-device AI (MediaPipe): tap-to-cut and face landmarks ---------- */
+const AI = {
+  V:'0.10.14', mod:null, fs:null, seg:null, face:null,
+  url(p){ return `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${this.V}/${p}`; },
+  async lib(){
+    if(!this.mod){ this.mod = await import(this.url('vision_bundle.mjs')); this.fs = await this.mod.FilesetResolver.forVisionTasks(this.url('wasm')); }
+    return this.mod;
+  },
+  async make(Cls, opts){
+    try { return await Cls.createFromOptions(this.fs, {...opts, baseOptions:{...opts.baseOptions, delegate:'GPU'}}); }
+    catch { return await Cls.createFromOptions(this.fs, {...opts, baseOptions:{...opts.baseOptions, delegate:'CPU'}}); }
+  },
+  async segmenter(){
+    if(!this.seg){ const m = await this.lib(); this.seg = await this.make(m.InteractiveSegmenter, {baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/interactive_segmenter/magic_touch/float32/1/magic_touch.tflite'}, outputCategoryMask:false, outputConfidenceMasks:true}); }
+    return this.seg;
+  },
+  async faces(){
+    if(!this.face){ const m = await this.lib(); this.face = await this.make(m.FaceLandmarker, {baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'}, runningMode:'IMAGE', numFaces:6}); }
+    return this.face;
+  },
+};
+async function aiMask(src, nx, ny){
+  const seg = await AI.segmenter(), inp = canvasFrom(src, 1024);
+  let out = null;
+  const grab = r => { const m = r && r.confidenceMasks && r.confidenceMasks[0]; if(m){ out = {w:m.width, h:m.height, d:m.getAsFloat32Array().slice()}; } };
+  const ret = seg.segment(inp, {keypoint:{x:clamp(nx,0,1), y:clamp(ny,0,1)}}, grab);
+  if(!out && ret) grab(ret);
+  if(!out) throw new Error('AIが対象を見つけられませんでした');
+  const mc = document.createElement('canvas'); mc.width=out.w; mc.height=out.h; const x = mc.getContext('2d'), id = x.createImageData(out.w, out.h);
+  for(let i=0;i<out.d.length;i++) id.data[i*4+3] = Math.round(clamp((out.d[i]-0.3)/0.4, 0, 1)*255);
+  x.putImageData(id, 0, 0); return mc;
+}
+const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+const eyesOf = P => { const l={x:(P[33].x+P[133].x)/2, y:(P[33].y+P[133].y)/2}, r={x:(P[362].x+P[263].x)/2, y:(P[362].y+P[263].y)/2};
+  return {m:{x:(l.x+r.x)/2, y:(l.y+r.y)/2}, d:Math.hypot(r.x-l.x, r.y-l.y)||1, a:Math.atan2(r.y-l.y, r.x-l.x)}; };
+const ovalOf = P => FACE_OVAL.map(i=>P[i]);
+const boxOf = pts => { const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y); const x0=Math.min(...xs), y0=Math.min(...ys); return {x:x0, y:y0, w:Math.max(...xs)-x0, h:Math.max(...ys)-y0}; };
+const shrink = (pts, f) => { const c = pts.reduce((a,p)=>({x:a.x+p.x/pts.length, y:a.y+p.y/pts.length}), {x:0,y:0}); return pts.map(p=>({x:c.x+(p.x-c.x)*f, y:c.y+(p.y-c.y)*f})); };
+function regionStats(img, pts){
+  // mean / spread of colour inside a face outline, sampled on a small copy
+  const b = boxOf(pts), k = Math.min(1, 160/Math.max(b.w, b.h)), w = Math.max(2, Math.round(b.w*k)), h = Math.max(2, Math.round(b.h*k));
+  const c = document.createElement('canvas'); c.width=w; c.height=h; const x = c.getContext('2d', {willReadFrequently:true});
+  x.drawImage(img, b.x, b.y, b.w, b.h, 0, 0, w, h); const px = x.getImageData(0,0,w,h).data;
+  x.clearRect(0,0,w,h); x.beginPath(); pts.forEach((p,i)=>{ const X=(p.x-b.x)*k, Y=(p.y-b.y)*k; i?x.lineTo(X,Y):x.moveTo(X,Y); }); x.closePath(); x.fill(); const m = x.getImageData(0,0,w,h).data;
+  const sum=[0,0,0], sq=[0,0,0]; let n=0;
+  for(let i=0;i<px.length;i+=4){ if(m[i+3]<200 || px[i+3]<200) continue; n++; for(let c2=0;c2<3;c2++){ sum[c2]+=px[i+c2]; sq[c2]+=px[i+c2]*px[i+c2]; } }
+  if(!n) return null;
+  const mean = sum.map(v=>v/n); return {mean, sd: sq.map((v,i)=>Math.sqrt(Math.max(1, v/n - mean[i]*mean[i])))};
+}
+async function faceCompose(){
+  const L = E.L; if(!L || L.type!=='img') return;
+  busy(true, '顔を探しています…（初回はAIの準備に少し時間がかかります）');
+  try {
+    const fl = await AI.faces(), A = E.base, B = L.orig;
+    const detect = c => { const r = fl.detect(canvasFrom(c, 1280)); return (r.faceLandmarks||[]).map(lm => lm.map(p=>({x:p.x*c.width, y:p.y*c.height}))); };
+    const fa = detect(A), fb = detect(B);
+    if(!fa.length) throw new Error('写真A（土台）に顔が見つかりませんでした');
+    if(!fb.length) throw new Error('写真Bに顔が見つかりませんでした');
+    const area = P => { const b = boxOf(ovalOf(P)); return b.w*b.h; };
+    const pb = fb.slice().sort((p,q)=>area(q)-area(p))[0];
+    const here = {x:L.x, y:L.y};
+    const pa = fa.slice().sort((p,q)=>Math.hypot(eyesOf(p).m.x-here.x, eyesOf(p).m.y-here.y) - Math.hypot(eyesOf(q).m.x-here.x, eyesOf(q).m.y-here.y))[0];
+    const ea = eyesOf(pa), eb = eyesOf(pb), s = ea.d/eb.d, r = ea.a-eb.a;
+    // soft face mask on B
+    const W = B.width, H = B.height, ovB = shrink(ovalOf(pb), 0.93), bb = boxOf(ovB), feather = Math.max(3, bb.w*0.08);
+    const sm = document.createElement('canvas'); sm.width = Math.max(2, Math.round(W/feather)); sm.height = Math.max(2, Math.round(H/feather));
+    const sx = sm.getContext('2d'); sx.scale(sm.width/W, sm.height/H); sx.beginPath(); shrink(ovB, 0.95).forEach((p,i)=> i?sx.lineTo(p.x,p.y):sx.moveTo(p.x,p.y)); sx.closePath(); sx.fill();
+    // colour match B's face to A's face
+    const stB = regionStats(B, ovB), stA = regionStats(A, shrink(ovalOf(pa), 0.85));
+    const out = document.createElement('canvas'); out.width=W; out.height=H; const ox = out.getContext('2d', {willReadFrequently:true});
+    ox.drawImage(B, 0, 0);
+    if(stA && stB){
+      const img = ox.getImageData(0,0,W,H), d = img.data, mix = 0.85;
+      const g = [0,1,2].map(c=>clamp(stA.sd[c]/stB.sd[c], 0.6, 1.6));
+      for(let i=0;i<d.length;i+=4) for(let c=0;c<3;c++){ const v=d[i+c], t=(v-stB.mean[c])*g[c]+stA.mean[c]; d[i+c]=clamp(Math.round(v+(t-v)*mix),0,255); }
+      ox.putImageData(img, 0, 0);
+    }
+    ox.globalCompositeOperation = 'destination-in'; ox.imageSmoothingEnabled = true; ox.drawImage(sm, 0, 0, W, H);
+    // place B's eyes on A's eyes
+    const v = {x:eb.m.x-W/2, y:eb.m.y-H/2};
+    Object.assign(L, {src:out, s, r, o:1, face:true, _t:null,
+      x: ea.m.x - (Math.cos(r)*v.x - Math.sin(r)*v.y)*s, y: ea.m.y - (Math.sin(r)*v.x + Math.cos(r)*v.y)*s});
+    E.refresh(); E.draw(); busy(false);
+    toast(fa.length>1 ? '顔を合わせました。別の顔に合わせたいときは、写真Bをその顔の近くに置いてからもう一度押してください' : '顔を合わせました。指で位置や大きさを微調整できます');
+  } catch(err){ showError('顔を合わせられませんでした', err); }
+  busy(false);
+}
+
 /* ---------- Cutout ---------- */
 const C = {
-  layer:null, backup:null, tool:'wand', lasso:'keep', undo:[], z:1, px:0, py:0, k:1, ox:0, oy:0, path:null, cursor:null,
+  layer:null, backup:null, tool:'ai', aiMode:'keep', lasso:'keep', undo:[], z:1, px:0, py:0, k:1, ox:0, oy:0, path:null, cursor:null,
   ctx(){ return this.layer.src.getContext('2d', {willReadFrequently:true}); },
   open(L){
     this.layer=L; this.undo=[]; this.z=1; this.px=0; this.py=0; this.path=null; this.cursor=null;
     const b=document.createElement('canvas'); b.width=L.src.width; b.height=L.src.height; b.getContext('2d').drawImage(L.src,0,0); this.backup=b;
     show('scr-cut'); this.setTool(this.tool); this.syncUndo(); requestAnimationFrame(()=>this.layout());
   },
-  close(){ this.layer=null; this.backup=null; this.undo=[]; show('scr-edit'); E.refresh(); requestAnimationFrame(()=>E.layout()); },
+  close(){ if(this.layer) this.layer._t=null; this.layer=null; this.backup=null; this.undo=[]; show('scr-edit'); E.refresh(); requestAnimationFrame(()=>E.layout()); },
   setTool(t){
     this.tool=t; document.querySelectorAll('#cut-tools button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.tool===t));
-    $('#opt-wand').hidden = t!=='wand'; $('#opt-lasso').hidden = t!=='lasso'; $('#opt-brush').hidden = !(t==='erase'||t==='restore');
+    $('#opt-ai').hidden = t!=='ai'; $('#opt-wand').hidden = t!=='wand'; $('#opt-lasso').hidden = t!=='lasso'; $('#opt-brush').hidden = !(t==='erase'||t==='restore');
     $('#brush-hint').textContent = t==='restore' ? 'なぞった部分を元の写真に戻します。' : 'なぞった部分を透明にします。';
     this.cursor=null; this.draw();
   },
@@ -1286,6 +1544,17 @@ const C = {
       ctx.clip(); ctx.clearRect(0,0,this.layer.src.width,this.layer.src.height); ctx.drawImage(this.layer.orig,0,0); ctx.restore(); }
     this.draw();
   },
+  async aiCut(p){
+    const L = this.layer, o = L.orig; if(!L) return;
+    busy(true, 'AIで切り抜き中…（初回はAIの準備に少し時間がかかります）');
+    try {
+      const m = await aiMask(o, p.x/o.width, p.y/o.height);
+      this.pushUndo(); const x = this.ctx(); x.save();
+      x.globalCompositeOperation = this.aiMode==='keep' ? 'destination-in' : 'destination-out';
+      x.imageSmoothingEnabled = true; x.drawImage(m, 0, 0, L.src.width, L.src.height); x.restore(); this.draw();
+    } catch(err){ showError('AIで切り抜けませんでした', err); }
+    busy(false);
+  },
   finishLasso(){
     const p=this.path; this.path=null; if(!p || p.length<6){ this.draw(); return; }
     this.pushUndo(); const ctx=this.ctx(); ctx.save();
@@ -1294,6 +1563,7 @@ const C = {
   },
 };
 document.querySelectorAll('#cut-tools button').forEach(b => b.onclick = () => C.setTool(b.dataset.tool));
+document.querySelectorAll('#ai-mode button').forEach(b => b.onclick = () => { C.aiMode=b.dataset.mode; document.querySelectorAll('#ai-mode button').forEach(x=>x.setAttribute('aria-pressed', x===b)); });
 document.querySelectorAll('#lasso-mode button').forEach(b => b.onclick = () => { C.lasso=b.dataset.mode; document.querySelectorAll('#lasso-mode button').forEach(x=>x.setAttribute('aria-pressed', x===b)); });
 $('#cut-tol').oninput = e => { $('#cut-tol-o').textContent = e.target.value; };
 $('#cut-size').oninput = e => { $('#cut-size-o').textContent = e.target.value; };
@@ -1334,7 +1604,8 @@ $('#cut-cancel').onclick = () => { if(C.layer && C.backup){ const ctx=C.ctx(); c
     if(!P.has(e.pointerId)) return; P.delete(e.pointerId);
     if(P.size<2) g=null;
     if(stroke && P.size===0){
-      if(C.tool==='wand' && !stroke.moved) C.wand(stroke.last);
+      if(C.tool==='ai' && !stroke.moved) C.aiCut(stroke.last);
+      else if(C.tool==='wand' && !stroke.moved) C.wand(stroke.last);
       else if(C.tool==='lasso') C.finishLasso();
       else if((C.tool==='erase'||C.tool==='restore') && !stroke.painted){ C.pushUndo(); C.brushTo(stroke.last, stroke.last); }
       stroke=null; C.cursor=null; C.draw();
