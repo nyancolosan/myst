@@ -966,8 +966,8 @@ async function openViewer(id, dir){
   $('#view-meta').textContent = isV ? `${pos} · ${fmtDur(it.dur)} · ${fmtSize(it.size||0)}` : `${pos} · ${date}`;
   const fo = S.index.folders.find(f=>f.id===it.folder); $('#va-cover').setAttribute('aria-pressed', !!fo && fo.cover===id); $('#va-cover').hidden = isV;
   const slideEl = isV ? vid : img; slideEl.classList.remove('slide-in-l','slide-in-r'); if(dir){ void slideEl.offsetWidth; slideEl.classList.add(dir>0?'slide-in-l':'slide-in-r'); }
-  $('#va-collage-l').textContent = it.proj ? '編集' : '土台にする';
-  $('#va-collage').hidden = isV; $('.view-actions').style.gridTemplateColumns = isV ? 'repeat(3,1fr)' : '';
+  $('#va-collage-l').textContent = isV ? '顔合成' : it.proj ? '編集' : '土台にする';
+  $('#va-collage').hidden = false; $('.view-actions').style.gridTemplateColumns = isV ? 'repeat(4,1fr)' : '';
   img.hidden = isV; vid.hidden = !isV;
   if(isV){
     vid.poster = it.thumb; busy(true, '動画を開いています…');
@@ -1065,6 +1065,7 @@ $('#va-cover').onclick = async () => {
 $('#va-collage').onclick = async () => {
   const id = S.viewId; if(!id) return;
   const pit = S.index.items.find(i=>i.id===id);
+  if(pit && pit.kind==='video'){ videoFaceSwap(pit); return; }
   if(pit && pit.proj){ busy(true, '編集データを開いています…'); try { await loadProject(id); } catch(err){ showError('編集データを開けませんでした', err); } busy(false); return; }
   busy(true); try { const bmp = await decodeImage(await getBlob(id)); E.open(); E.setBase(bmp); } catch { toast('写真を開けませんでした'); } busy(false);
 };
@@ -1452,6 +1453,10 @@ const AI = {
     return this.seg;
   },
   warm(){ if(this._warm) return; this._warm = true; setTimeout(()=>{ this.faces().then(()=>this.parser()).catch(()=>{ this._warm=false; }); }, 300); },
+  async facesVideo(){
+    if(!this.vface){ const m = await this.lib(); this.vface = await this.make(m.FaceLandmarker, {baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'}, runningMode:'VIDEO', numFaces:4}); }
+    return this.vface;
+  },
   async parser(){
     if(!this.hair){ const m = await this.lib(); this.hair = await this.make(m.ImageSegmenter, {baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite'}, runningMode:'IMAGE', outputCategoryMask:false, outputConfidenceMasks:true}); }
     return this.hair;
@@ -1631,6 +1636,21 @@ function hairMap(hp, aReg, R){
     return hair;
   } catch { return null; }
 }
+const STABLE_PTS = [33,133,362,263,168,6,197,4,1,234,454,127,356,10,9,151];
+function fitFace(A, pa, B, pb){ // place B's face (unchanged) over A's face; returns the data FC.render needs
+  const n=STABLE_PTS.length; let ax=0,ay=0,bx=0,by=0; for(const i of STABLE_PTS){ ax+=pa[i].x; ay+=pa[i].y; bx+=pb[i].x; by+=pb[i].y; } ax/=n; ay/=n; bx/=n; by/=n;
+  let sxx=0, sxy=0, sbb=0; for(const i of STABLE_PTS){ const ux=pb[i].x-bx, uy=pb[i].y-by, vx=pa[i].x-ax, vy=pa[i].y-ay; sxx+=ux*vx+uy*vy; sxy+=ux*vy-uy*vx; sbb+=ux*ux+uy*uy; }
+  const r=Math.atan2(sxy, sxx), sc=Math.hypot(sxx, sxy)/(sbb||1), c=Math.cos(r)*sc, sn=Math.sin(r)*sc;
+  const sim = {a:c, b:sn, c:-sn, d:c, e:ax-(c*bx-sn*by), f:ay-(sn*bx+c*by)};
+  const pbA = pb.map(p => ({x: sim.a*p.x + sim.c*p.y + sim.e, y: sim.b*p.x + sim.d*p.y + sim.f}));
+  const bo = boxOf(ovalOf(pbA).concat(ovalOf(pa))), ob = boxOf(ovalOf(pa)), mx = bo.w*0.12, my = bo.h*0.12;
+  const R = {x:Math.max(0,Math.floor(bo.x-mx)), y:Math.max(0,Math.floor(bo.y-my))};
+  R.w = Math.max(2, Math.min(A.width, Math.ceil(bo.x+bo.w+mx)) - R.x); R.h = Math.max(2, Math.min(A.height, Math.ceil(bo.y+bo.h+my)) - R.y);
+  const rigid = document.createElement('canvas'); rigid.width=R.w; rigid.height=R.h;
+  const rx = rigid.getContext('2d'); rx.imageSmoothingQuality='high'; rx.setTransform(sim.a, sim.b, sim.c, sim.d, sim.e-R.x, sim.f-R.y); rx.drawImage(B, 0, 0);
+  const aReg = document.createElement('canvas'); aReg.width=R.w; aReg.height=R.h; aReg.getContext('2d').drawImage(A, R.x, R.y, R.w, R.h, 0, 0, R.w, R.h);
+  return {R, rigid, mesh:null, B, pbRaw:pb, aReg, hair:null, pa:pa.map(p=>({x:p.x-R.x, y:p.y-R.y})), pbT:pbA.map(p=>({x:p.x-R.x, y:p.y-R.y})), fw:ob.w, faces:[pa]};
+}
 function chooseFace(A, faces){
   return new Promise(res => sheet((el, close) => {
     const crops = faces.map(P => { const b=boxOf(ovalOf(P)), m=b.w*0.25, c=document.createElement('canvas'); c.width=c.height=120;
@@ -1684,6 +1704,138 @@ async function faceCompose(repick){
     }
   } catch(err){ showError('顔を合わせられませんでした', err); }
   busy(false);
+}
+
+/* ---------- Video face swap: track the face in every frame and composite photo B's face ---------- */
+const MUXER_URL = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/+esm';
+const seekTo = (v, t) => new Promise((ok, ng) => { const done = () => { v.removeEventListener('seeked', done); clearTimeout(to); ok(); }; const to = setTimeout(()=>{ v.removeEventListener('seeked', done); ok(); }, 3000); v.addEventListener('seeked', done); v.currentTime = t; });
+function videoSettings(previewUrl){
+  return new Promise(res => sheet((el, close) => {
+    const p = {mode:'full', blend:90, edge:35};
+    el.innerHTML = `<h2>この仕上がりで動画を作りますか？</h2>
+      <img src="${previewUrl}" alt="仕上がりの見本" style="width:100%;border-radius:14px;display:block">
+      <div class="seg" id="vs-mode"><button data-v="full" aria-pressed="true">顔全体</button><button data-v="parts" aria-pressed="false">目・鼻・口だけ</button></div>
+      <label class="slider" for="vs-blend">なじませ<input type="range" id="vs-blend" min="0" max="100" value="90"><output id="vs-blend-o">90</output></label>
+      <label class="slider" for="vs-edge">境目の幅<input type="range" id="vs-edge" min="0" max="100" value="35"><output id="vs-edge-o">35</output></label>
+      <p class="hint">見本は動画の1コマです。作成には動画の長さの数倍の時間がかかります。作成中はMYSTを開いたままにしてください。</p>
+      <div class="row"><button class="btn ghost" data-x>やめる</button><button class="btn primary" data-ok>作成を始める</button></div>`;
+    el.querySelectorAll('#vs-mode [data-v]').forEach(b => b.onclick = () => { p.mode=b.dataset.v; el.querySelectorAll('#vs-mode [data-v]').forEach(x=>x.setAttribute('aria-pressed', x===b)); });
+    for(const k of ['blend','edge']) el.querySelector(`#vs-${k}`).oninput = e => { p[k]=+e.target.value; el.querySelector(`#vs-${k}-o`).textContent=e.target.value; };
+    el.querySelector('[data-x]').onclick = () => { close(); res(null); };
+    el.querySelector('[data-ok]').onclick = () => { close(); res(p); };
+  }, () => res(null)));
+}
+async function videoFaceSwap(it){
+  if(!('VideoEncoder' in window) || !('VideoFrame' in window)) { confirmSheet('このiPhoneでは動画を書き出せません', 'iOSを最新にすると使えるようになります（動画の書き出し機能が必要です）。', 'わかった'); return; }
+  const bmp = await pickSource('合成する顔の写真Bを選ぶ'); if(!bmp) return;
+  const B = canvasFrom(bmp, 1600); bmp.close && bmp.close();
+  let url = null, stop = false, wake = null;
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.setAttribute('playsinline',''); video.preload = 'auto';
+  try {
+    busy(true, '顔を探しています…（初回はAIの準備に少し時間がかかります）');
+    const still = await AI.faces();
+    const fb = (still.detect(canvasFrom(B, 1280)).faceLandmarks||[]).map(lm => lm.slice(0,468).map(p=>({x:p.x*B.width, y:p.y*B.height})));
+    if(!fb.length) throw new Error('写真Bに顔が見つかりませんでした');
+    const area = P => { const b = boxOf(ovalOf(P)); return b.w*b.h; };
+    const pb = fb.sort((p,q)=>area(q)-area(p))[0];
+    busy(true, '動画を開いています…');
+    url = URL.createObjectURL(await getBlob(it.id)); S.urls.push(url);
+    video.src = url; await new Promise((ok, ng) => { video.onloadeddata = ok; video.onerror = () => ng(new Error('動画を読み込めませんでした')); });
+    const dur = Math.min(video.duration || 0, 60);
+    if(!dur) throw new Error('動画の長さが分かりませんでした');
+    // output size: keep aspect, long side up to 1280, even numbers
+    const k = Math.min(1, 1280/Math.max(video.videoWidth, video.videoHeight));
+    const W = Math.max(2, Math.round(video.videoWidth*k/2)*2), H = Math.max(2, Math.round(video.videoHeight*k/2)*2);
+    const frame = document.createElement('canvas'); frame.width=W; frame.height=H; const fx = frame.getContext('2d', {willReadFrequently:true});
+    const findFaces = (det, c, t) => (det.detectForVideo ? det.detectForVideo(canvasFrom(c, 640), t) : det.detect(canvasFrom(c, 640))).faceLandmarks || [];
+    // preview + choose which face to follow (the largest one at the preview moment)
+    const pt = Math.min(1, dur/2);
+    await seekTo(video, pt); fx.drawImage(video, 0, 0, W, H);
+    const pf = (still.detect(canvasFrom(frame, 1280)).faceLandmarks||[]).map(lm => lm.slice(0,468).map(p=>({x:p.x*W, y:p.y*H})));
+    if(!pf.length) throw new Error('動画のこの場面に顔が見つかりませんでした。顔がはっきり映っている動画で試してください');
+    let target = pf.sort((p,q)=>area(q)-area(p))[0];
+    if(pf.length>1){ busy(false); const i = await chooseFace(frame, pf); if(i==null) return; target = pf[i]; }
+    const prevL = {fc: fitFace(frame, target, B, pb), fp:{mode:'full', blend:90, edge:35, tex:70, hair:false, fit:'keep'}};
+    FC.render(prevL); fx.drawImage(prevL.src, prevL.fc.R.x, prevL.fc.R.y);
+    busy(false);
+    const opt = await videoSettings(frame.toDataURL('image/jpeg', .85)); if(!opt) return;
+    // ---- encoder setup ----
+    busy(true, '書き出しの準備中…');
+    const {Muxer, ArrayBufferTarget} = await import(MUXER_URL);
+    const fps = 30, total = Math.max(1, Math.floor(dur*fps));
+    const codecs = ['avc1.640028','avc1.4d0028','avc1.42001f'];
+    let vcfg = null;
+    for(const c of codecs){ const cfg = {codec:c, width:W, height:H, bitrate: Math.round(W*H*fps*0.12), framerate:fps}; try { if((await VideoEncoder.isConfigSupported(cfg)).supported){ vcfg = cfg; break; } } catch {} }
+    if(!vcfg) throw new Error('この動画サイズを書き出せませんでした');
+    // audio (kept when this iPhone can re-encode it)
+    let audio = null;
+    try {
+      if('AudioEncoder' in window && 'AudioData' in window){
+        const ab = await (await getBlob(it.id)).arrayBuffer();
+        const ac = new (window.AudioContext || window.webkitAudioContext)();
+        const buf = await ac.decodeAudioData(ab); ac.close && ac.close();
+        const acfg = {codec:'mp4a.40.2', sampleRate:buf.sampleRate, numberOfChannels:Math.min(2, buf.numberOfChannels), bitrate:128000};
+        if((await AudioEncoder.isConfigSupported(acfg)).supported) audio = {buf, cfg:acfg};
+      }
+    } catch { audio = null; }
+    const target2 = new ArrayBufferTarget();
+    const muxer = new Muxer({target: target2, fastStart:'in-memory', video:{codec:'avc', width:W, height:H, frameRate:fps},
+      ...(audio ? {audio:{codec:'aac', numberOfChannels:audio.cfg.numberOfChannels, sampleRate:audio.cfg.sampleRate}} : {})});
+    let encErr = null;
+    const venc = new VideoEncoder({output:(c, m)=>muxer.addVideoChunk(c, m), error:e=>{ encErr = e; }});
+    venc.configure(vcfg);
+    // ---- frame loop ----
+    S.importing = true; try { wake = await withTimeout(navigator.wakeLock.request('screen'), 800); } catch {}
+    const det = await AI.facesVideo();
+    let smooth = null, lost = 0;
+    const t0 = Date.now();
+    const cancel = () => { stop = true; busy(true, '中止しています…'); };
+    for(let i=0; i<total && !stop; i++){
+      if(encErr) throw encErr;
+      const t = i/fps;
+      await seekTo(video, t); fx.drawImage(video, 0, 0, W, H);
+      const faces = findFaces(det, frame, Math.round(t*1000)+1).map(lm => lm.slice(0,468).map(p=>({x:p.x*W, y:p.y*H})));
+      if(faces.length){
+        // follow the same person: the face closest to where it was last time
+        const ref = smooth || target, refM = eyesOf(ref).m;
+        const pa = faces.sort((p,q)=>{ const a2=eyesOf(p).m, b2=eyesOf(q).m; return Math.hypot(a2.x-refM.x,a2.y-refM.y)-Math.hypot(b2.x-refM.x,b2.y-refM.y); })[0];
+        smooth = smooth ? pa.map((p,j)=>({x:smooth[j].x*0.35+p.x*0.65, y:smooth[j].y*0.35+p.y*0.65})) : pa;   // calm the jitter
+        const Lf = {fc: fitFace(frame, smooth, B, pb), fp:{mode:opt.mode, blend:opt.blend, edge:opt.edge, tex:70, hair:false, fit:'keep'}};
+        FC.render(Lf); fx.drawImage(Lf.src, Lf.fc.R.x, Lf.fc.R.y); lost = 0;
+      } else if(++lost > 6) smooth = null;
+      const vf = new VideoFrame(frame, {timestamp: Math.round(t*1e6), duration: Math.round(1e6/fps)});
+      venc.encode(vf, {keyFrame: i % (fps*2) === 0}); vf.close();
+      while(venc.encodeQueueSize > 8) await new Promise(r=>setTimeout(r,5));
+      if(i % 3 === 0){ const el = (Date.now()-t0)/1000, left = el/(i+1)*(total-i-1);
+        busy(true, `顔を合成中… ${Math.round((i+1)/total*100)}%（残り約${left>90?Math.round(left/60)+'分':Math.round(left)+'秒'}）`, {progress:(i+1)/total, onCancel:cancel}); }
+    }
+    await venc.flush(); venc.close();
+    if(stop){ toast('動画の作成を中止しました'); return; }
+    if(audio){
+      busy(true, '音声を書き出し中…');
+      const aenc = new AudioEncoder({output:(c, m)=>muxer.addAudioChunk(c, m), error:()=>{}});
+      aenc.configure(audio.cfg);
+      const {buf, cfg} = audio, ch = cfg.numberOfChannels, sr = buf.sampleRate, endF = Math.min(buf.length, Math.floor(dur*sr)), step = 1024;
+      for(let f=0; f<endF; f+=step){ const n = Math.min(step, endF-f), data = new Float32Array(n*ch);
+        for(let c=0;c<ch;c++) data.set(buf.getChannelData(c).subarray(f, f+n), c*n);
+        const ad = new AudioData({format:'f32-planar', sampleRate:sr, numberOfFrames:n, numberOfChannels:ch, timestamp:Math.round(f/sr*1e6), data}); aenc.encode(ad); ad.close(); }
+      await aenc.flush(); aenc.close();
+    }
+    muxer.finalize();
+    busy(true, '暗号化して保存中…');
+    const out = new Blob([target2.buffer], {type:'video/mp4'});
+    const info = (await videoInfo(out)) || {thumb: thumbOf(frame), w:W, h:H, dur};   // keep the video even if a preview can't be read back
+    await storeVideo(out, info, it.folder); await saveIndex();
+    busy(false);
+    toast(`顔を合成した動画を保存しました${audio ? '' : '（音声なし）'}`);
+    const made = S.index.items[S.index.items.length-1]; if(made) openViewer(made.id);
+  } catch(err){ showError('動画の顔合成ができませんでした', err); }
+  finally {
+    S.importing = false; try { wake && wake.release(); } catch {}
+    try { video.removeAttribute('src'); video.load(); } catch {}
+    busy(false);
+    if(S.lockPending){ S.lockPending = false; lock(); }
+  }
 }
 
 /* ---------- Cutout ---------- */
