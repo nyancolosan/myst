@@ -1446,41 +1446,98 @@ function regionStats(img, pts){
   if(!n) return null;
   const mean = sum.map(v=>v/n); return {mean, sd: sq.map((v,i)=>Math.sqrt(Math.max(1, v/n - mean[i]*mean[i])))};
 }
+/* Delaunay triangulation (Bowyer–Watson) for the face mesh */
+function delaunay(pts){
+  const n=pts.length; let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const p of pts){ minX=Math.min(minX,p.x); minY=Math.min(minY,p.y); maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y); }
+  const d=Math.max(maxX-minX,maxY-minY)*20, cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+  const P=pts.concat([{x:cx-d,y:cy-d},{x:cx+d,y:cy-d},{x:cx,y:cy+d}]);
+  const circ=(i,j,k)=>{ const A=P[i],B=P[j],C=P[k], D=2*(A.x*(B.y-C.y)+B.x*(C.y-A.y)+C.x*(A.y-B.y)) || 1e-9;
+    const ux=((A.x*A.x+A.y*A.y)*(B.y-C.y)+(B.x*B.x+B.y*B.y)*(C.y-A.y)+(C.x*C.x+C.y*C.y)*(A.y-B.y))/D;
+    const uy=((A.x*A.x+A.y*A.y)*(C.x-B.x)+(B.x*B.x+B.y*B.y)*(A.x-C.x)+(C.x*C.x+C.y*C.y)*(B.x-A.x))/D;
+    return {x:ux,y:uy,r2:(A.x-ux)**2+(A.y-uy)**2}; };
+  let tris=[{v:[n,n+1,n+2],c:circ(n,n+1,n+2)}];
+  for(let i=0;i<n;i++){ const p=P[i], bad=[], keep=[];
+    for(const t of tris) ((p.x-t.c.x)**2+(p.y-t.c.y)**2 < t.c.r2 ? bad : keep).push(t);
+    const edges=new Map();
+    for(const t of bad) for(const [a,b] of [[t.v[0],t.v[1]],[t.v[1],t.v[2]],[t.v[2],t.v[0]]]){ const k=a<b?a+','+b:b+','+a; edges.has(k)?edges.delete(k):edges.set(k,[a,b]); }
+    for(const [a,b] of edges.values()) keep.push({v:[a,b,i], c:circ(a,b,i)});
+    tris=keep; }
+  return tris.filter(t=>t.v.every(v=>v<n)).map(t=>t.v);
+}
+function solveAffine(s0,s1,s2,d0,d1,d2){
+  const det = s0.x*(s1.y-s2.y) - s0.y*(s1.x-s2.x) + (s1.x*s2.y-s2.x*s1.y); if(Math.abs(det)<1e-9) return null;
+  const f = (v0,v1,v2) => [
+    (v0*(s1.y-s2.y) - s0.y*(v1-v2) + (v1*s2.y-v2*s1.y))/det,
+    (s0.x*(v1-v2) - v0*(s1.x-s2.x) + (s1.x*v2-s2.x*v1))/det,
+    (s0.x*(s1.y*v2-s2.y*v1) - s0.y*(s1.x*v2-s2.x*v1) + v0*(s1.x*s2.y-s2.x*s1.y))/det ];
+  const [a,c,e]=f(d0.x,d1.x,d2.x), [b,d,g]=f(d0.y,d1.y,d2.y); return [a,b,c,d,e,g];
+}
+function shrinkTo(c, w, h){ // area-averaging downscale by repeated halving
+  let cur=c; while(cur.width/2>w*1.2 && cur.height/2>h*1.2){ const n=document.createElement('canvas'); n.width=Math.ceil(cur.width/2); n.height=Math.ceil(cur.height/2); n.getContext('2d').drawImage(cur,0,0,n.width,n.height); cur=n; }
+  const o=document.createElement('canvas'); o.width=w; o.height=h; o.getContext('2d').drawImage(cur,0,0,w,h); return o;
+}
 async function faceCompose(){
   const L = E.L; if(!L || L.type!=='img') return;
   busy(true, '顔を探しています…（初回はAIの準備に少し時間がかかります）');
   try {
-    const fl = await AI.faces(), A = E.base, B = L.orig;
-    const detect = c => { const r = fl.detect(canvasFrom(c, 1280)); return (r.faceLandmarks||[]).map(lm => lm.map(p=>({x:p.x*c.width, y:p.y*c.height}))); };
+    const fl = await AI.faces(), A = E.base, B = L.bsrc || L.orig;
+    const detect = c => { const r = fl.detect(canvasFrom(c, 1280)); return (r.faceLandmarks||[]).map(lm => lm.slice(0,468).map(p=>({x:p.x*c.width, y:p.y*c.height}))); };
     const fa = detect(A), fb = detect(B);
     if(!fa.length) throw new Error('写真A（土台）に顔が見つかりませんでした');
     if(!fb.length) throw new Error('写真Bに顔が見つかりませんでした');
     const area = P => { const b = boxOf(ovalOf(P)); return b.w*b.h; };
     const pb = fb.slice().sort((p,q)=>area(q)-area(p))[0];
-    const here = {x:L.x, y:L.y};
-    const pa = fa.slice().sort((p,q)=>Math.hypot(eyesOf(p).m.x-here.x, eyesOf(p).m.y-here.y) - Math.hypot(eyesOf(q).m.x-here.x, eyesOf(q).m.y-here.y))[0];
-    const ea = eyesOf(pa), eb = eyesOf(pb), s = ea.d/eb.d, r = ea.a-eb.a;
-    // soft face mask on B
-    const W = B.width, H = B.height, ovB = shrink(ovalOf(pb), 0.93), bb = boxOf(ovB), feather = Math.max(3, bb.w*0.08);
-    const sm = document.createElement('canvas'); sm.width = Math.max(2, Math.round(W/feather)); sm.height = Math.max(2, Math.round(H/feather));
-    const sx = sm.getContext('2d'); sx.scale(sm.width/W, sm.height/H); sx.beginPath(); shrink(ovB, 0.95).forEach((p,i)=> i?sx.lineTo(p.x,p.y):sx.moveTo(p.x,p.y)); sx.closePath(); sx.fill();
-    // colour match B's face to A's face
-    const stB = regionStats(B, ovB), stA = regionStats(A, shrink(ovalOf(pa), 0.85));
-    const out = document.createElement('canvas'); out.width=W; out.height=H; const ox = out.getContext('2d', {willReadFrequently:true});
-    ox.drawImage(B, 0, 0);
-    if(stA && stB){
-      const img = ox.getImageData(0,0,W,H), d = img.data, mix = 0.85;
-      const g = [0,1,2].map(c=>clamp(stA.sd[c]/stB.sd[c], 0.6, 1.6));
-      for(let i=0;i<d.length;i+=4) for(let c=0;c<3;c++){ const v=d[i+c], t=(v-stB.mean[c])*g[c]+stA.mean[c]; d[i+c]=clamp(Math.round(v+(t-v)*mix),0,255); }
-      ox.putImageData(img, 0, 0);
+    // which face in A: the one nearest to where photo B currently sits
+    const here = {x:L.x, y:L.y}, dd = P => { const m=eyesOf(P).m; return Math.hypot(m.x-here.x, m.y-here.y); };
+    const pa = fa.slice().sort((p,q)=>dd(p)-dd(q))[0];
+    busy(true, '顔の形を合わせています…');
+    await new Promise(r=>setTimeout(r,30));
+    // working region on A around the target face
+    const ob = boxOf(ovalOf(pa)), mx = ob.w*0.12, my = ob.h*0.12;
+    const R = {x:Math.max(0,Math.floor(ob.x-mx)), y:Math.max(0,Math.floor(ob.y-my))};
+    R.w = Math.min(A.width, Math.ceil(ob.x+ob.w+mx)) - R.x; R.h = Math.min(A.height, Math.ceil(ob.y+ob.h+my)) - R.y;
+    // 1) warp B's face onto A's face shape, triangle by triangle
+    const warp = document.createElement('canvas'); warp.width=R.w; warp.height=R.h; const wx = warp.getContext('2d');
+    const tris = delaunay(pa);
+    for(const [i,j,k] of tris){
+      const d = [pa[i],pa[j],pa[k]].map(p=>({x:p.x-R.x, y:p.y-R.y})), sp = [pb[i],pb[j],pb[k]];
+      const c = {x:(d[0].x+d[1].x+d[2].x)/3, y:(d[0].y+d[1].y+d[2].y)/3};
+      const g = d.map(p=>{ const vx=p.x-c.x, vy=p.y-c.y, l=Math.hypot(vx,vy)||1; return {x:p.x+vx/l*0.9, y:p.y+vy/l*0.9}; }); // grow a hair to hide seams
+      const m = solveAffine(sp[0],sp[1],sp[2], d[0],d[1],d[2]); if(!m) continue;
+      wx.save(); wx.beginPath(); wx.moveTo(g[0].x,g[0].y); wx.lineTo(g[1].x,g[1].y); wx.lineTo(g[2].x,g[2].y); wx.closePath(); wx.clip();
+      wx.setTransform(m[0],m[1],m[2],m[3],m[4],m[5]); wx.drawImage(B,0,0); wx.restore();
     }
-    ox.globalCompositeOperation = 'destination-in'; ox.imageSmoothingEnabled = true; ox.drawImage(sm, 0, 0, W, H);
-    // place B's eyes on A's eyes
-    const v = {x:eb.m.x-W/2, y:eb.m.y-H/2};
-    Object.assign(L, {src:out, s, r, o:1, face:true, flip:false, _t:null,
-      x: ea.m.x - (Math.cos(r)*v.x - Math.sin(r)*v.y)*s, y: ea.m.y - (Math.sin(r)*v.x + Math.cos(r)*v.y)*s});
+    // 2) soft mask = A's face outline, feathered
+    const ovA = shrink(ovalOf(pa), 0.95).map(p=>({x:p.x-R.x, y:p.y-R.y})), feather = Math.max(3, ob.w*0.07);
+    const sm = document.createElement('canvas'); sm.width=Math.max(2,Math.round(R.w/feather)); sm.height=Math.max(2,Math.round(R.h/feather));
+    const sx = sm.getContext('2d'); sx.scale(sm.width/R.w, sm.height/R.h); sx.beginPath(); shrink(ovA,0.96).forEach((p,i)=> i?sx.lineTo(p.x,p.y):sx.moveTo(p.x,p.y)); sx.closePath(); sx.fill();
+    const mask = document.createElement('canvas'); mask.width=R.w; mask.height=R.h; const mkx=mask.getContext('2d'); mkx.imageSmoothingEnabled=true; mkx.drawImage(sm,0,0,R.w,R.h);
+    wx.save(); wx.globalCompositeOperation='destination-in'; wx.drawImage(mask,0,0); wx.restore();
+    // 3) carry over A's lighting and skin tone (low-frequency difference, like seamless cloning)
+    const aReg = document.createElement('canvas'); aReg.width=R.w; aReg.height=R.h; const ax=aReg.getContext('2d');
+    ax.drawImage(A, R.x, R.y, R.w, R.h, 0, 0, R.w, R.h); ax.globalCompositeOperation='destination-in'; ax.drawImage(mask,0,0);
+    const cell = Math.max(6, ob.w/16), gw = Math.max(2, Math.round(R.w/cell)), gh = Math.max(2, Math.round(R.h/cell));
+    const sA = shrinkTo(aReg, gw, gh).getContext('2d').getImageData(0,0,gw,gh).data, sW = shrinkTo(warp, gw, gh).getContext('2d').getImageData(0,0,gw,gh).data;
+    let diff = new Float32Array(gw*gh*3), ok = new Uint8Array(gw*gh);
+    for(let q=0;q<gw*gh;q++){ if(sA[q*4+3]>40 && sW[q*4+3]>40){ ok[q]=1; for(let c=0;c<3;c++) diff[q*3+c]=sA[q*4+c]-sW[q*4+c]; } }
+    for(let pass=0; pass<4; pass++){ // spread values into empty cells so edges don't darken
+      const nd = diff.slice(), no = ok.slice();
+      for(let y=0;y<gh;y++) for(let x=0;x<gw;x++){ const q=y*gw+x; if(ok[q]) continue; let n=0, acc=[0,0,0];
+        for(const [ox2,oy2] of [[1,0],[-1,0],[0,1],[0,-1]]){ const X=x+ox2, Y=y+oy2; if(X<0||Y<0||X>=gw||Y>=gh) continue; const r=Y*gw+X; if(ok[r]){ n++; for(let c=0;c<3;c++) acc[c]+=diff[r*3+c]; } }
+        if(n){ no[q]=1; for(let c=0;c<3;c++) nd[q*3+c]=acc[c]/n; } }
+      diff = nd; ok = no; }
+    const img = wx.getImageData(0,0,R.w,R.h), px = img.data, strength = 0.9;
+    for(let y=0;y<R.h;y++){ const fy = clamp((y+0.5)/R.h*gh-0.5, 0, gh-1), y0=Math.floor(fy), y1=Math.min(gh-1,y0+1), ty=fy-y0;
+      for(let x=0;x<R.w;x++){ const i=(y*R.w+x)*4; if(!px[i+3]) continue;
+        const fx = clamp((x+0.5)/R.w*gw-0.5, 0, gw-1), x0=Math.floor(fx), x1=Math.min(gw-1,x0+1), tx=fx-x0;
+        for(let c=0;c<3;c++){ const v = (diff[(y0*gw+x0)*3+c]*(1-tx)+diff[(y0*gw+x1)*3+c]*tx)*(1-ty) + (diff[(y1*gw+x0)*3+c]*(1-tx)+diff[(y1*gw+x1)*3+c]*tx)*ty;
+          px[i+c] = clamp(Math.round(px[i+c] + v*strength), 0, 255); } } }
+    wx.putImageData(img, 0, 0);
+    // 4) the result becomes a face layer sitting exactly over A's face
+    Object.assign(L, {bsrc:B, src:warp, orig:warp, s:1, r:0, o:1, flip:false, face:true, _t:null, x:R.x+R.w/2, y:R.y+R.h/2});
     E.refresh(); E.draw(); busy(false);
-    toast(fa.length>1 ? '顔を合わせました。別の顔に合わせたいときは、写真Bをその顔の近くに置いてからもう一度押してください' : '顔を合わせました。指で位置や大きさを微調整できます');
+    toast(fa.length>1 ? '顔を合わせました。別の顔にしたいときは、写真Bをその顔の近くに置き直して、もう一度選んで押してください' : '顔を合わせました。不透明度や消しゴムで仕上げを調整できます');
   } catch(err){ showError('顔を合わせられませんでした', err); }
   busy(false);
 }
