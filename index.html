@@ -1093,6 +1093,7 @@ const E = {
     const orig = document.createElement('canvas'); orig.width=src.width; orig.height=src.height; orig.getContext('2d').drawImage(src,0,0);
     const s = 0.5 * this.base.width / src.width;
     this.layers.push({type:'img', src, orig, x:this.base.width/2, y:this.base.height/2, s, r:0, o:1});
+    AI.warm();   // get the face/hair AI ready while the user positions photo B
     this.active = this.layers.length-1; this.refresh(); this.draw();
   },
   async addText(t){
@@ -1429,6 +1430,7 @@ const AI = {
     if(!this.seg){ const m = await this.lib(); this.seg = await this.make(m.InteractiveSegmenter, {baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/interactive_segmenter/magic_touch/float32/1/magic_touch.tflite'}, outputCategoryMask:false, outputConfidenceMasks:true}); }
     return this.seg;
   },
+  warm(){ if(this._warm) return; this._warm = true; setTimeout(()=>{ this.faces().then(()=>this.parser()).catch(()=>{ this._warm=false; }); }, 300); },
   async parser(){
     if(!this.hair){ const m = await this.lib(); this.hair = await this.make(m.ImageSegmenter, {baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite'}, runningMode:'IMAGE', outputCategoryMask:false, outputConfidenceMasks:true}); }
     return this.hair;
@@ -1597,6 +1599,17 @@ function meshWarp(B, pb, paR, R){ // reshape B's face to A's landmarks (follows 
   }
   return warp;
 }
+function hairMap(hp, aReg, R){
+  try {
+    const inp = canvasFrom(aReg, 256); let conf = null;
+    const grab = r => { const m = r && r.confidenceMasks && r.confidenceMasks[1]; if(m) conf = {w:m.width, h:m.height, d:m.getAsFloat32Array().slice()}; };
+    const ret = hp.segment(inp, grab); if(!conf && ret) grab(ret);
+    if(!conf) return null;
+    const hair = new Float32Array(R.w*R.h);
+    for(let y=0;y<R.h;y++){ const sy=Math.min(conf.h-1, Math.floor(y/R.h*conf.h)); for(let x=0;x<R.w;x++) hair[y*R.w+x]=conf.d[sy*conf.w+Math.min(conf.w-1, Math.floor(x/R.w*conf.w))]; }
+    return hair;
+  } catch { return null; }
+}
 function chooseFace(A, faces){
   return new Promise(res => sheet((el, close) => {
     const crops = faces.map(P => { const b=boxOf(ovalOf(P)), m=b.w*0.25, c=document.createElement('canvas'); c.width=c.height=120;
@@ -1634,16 +1647,7 @@ async function faceCompose(repick){
     const rigid = document.createElement('canvas'); rigid.width=R.w; rigid.height=R.h;
     const rx = rigid.getContext('2d'); rx.imageSmoothingQuality='high'; rx.setTransform(sim.a, sim.b, sim.c, sim.d, sim.e-R.x, sim.f-R.y); rx.drawImage(B, 0, 0);
     const aReg = document.createElement('canvas'); aReg.width=R.w; aReg.height=R.h; aReg.getContext('2d').drawImage(A, R.x, R.y, R.w, R.h, 0, 0, R.w, R.h);
-    // find A's hair so it can stay on top
-    let hair = null;
-    try {
-      busy(true, '髪の毛を見分けています…');
-      const hp = await AI.parser(), inp = canvasFrom(aReg, 512); let conf = null;
-      const grab = r => { const m = r && r.confidenceMasks && r.confidenceMasks[1]; if(m) conf = {w:m.width, h:m.height, d:m.getAsFloat32Array().slice()}; };
-      const ret = hp.segment(inp, grab); if(!conf && ret) grab(ret);
-      if(conf){ hair = new Float32Array(R.w*R.h);
-        for(let y=0;y<R.h;y++) for(let x=0;x<R.w;x++){ const sx2=Math.min(conf.w-1, Math.floor(x/R.w*conf.w)), sy2=Math.min(conf.h-1, Math.floor(y/R.h*conf.h)); hair[y*R.w+x]=conf.d[sy2*conf.w+sx2]; } }
-    } catch { hair = null; }
+    let hair = AI.hair ? hairMap(AI.hair, aReg, R) : null;   // instant when the AI is already loaded
     busy(true, '境目をなじませています…'); await new Promise(r=>setTimeout(r,30));
     const paR = pa.map(p=>({x:p.x-R.x, y:p.y-R.y})), pbT = pbA.map(p=>({x:p.x-R.x, y:p.y-R.y}));
     L.fc = {R, rigid, mesh:null, B, pbRaw:pb, aReg, hair, pa:paR, pbT, fw:ob.w, faces:fa};
@@ -1651,7 +1655,12 @@ async function faceCompose(repick){
     FC.render(L);
     Object.assign(L, {bsrc:B, s:1, r:0, o:1, flip:false, face:true, x:R.x+R.w/2, y:R.y+R.h/2});
     E.refresh(); E.draw(); busy(false);
-    toast(hair ? '顔を合わせました。下の調整で仕上げられます' : '顔を合わせました（髪の見分けは使えませんでした）');
+    if(hair) toast('顔を合わせました。下の調整で仕上げられます');
+    else { toast('顔を合わせました。前髪・髪の毛の見分けは裏で続けています');
+      const fc = L.fc;
+      AI.parser().then(hp => { fc.hair = hairMap(hp, fc.aReg, fc.R); if(L.fc===fc && fc.hair && L.fp.hair){ FC.render(L); E.draw(); FC.sync(); toast('前髪・髪の毛を見分けて仕上げ直しました'); } else FC.sync(); })
+        .catch(() => toast('前髪・髪の毛の見分けは使えませんでした'));
+    }
   } catch(err){ showError('顔を合わせられませんでした', err); }
   busy(false);
 }
