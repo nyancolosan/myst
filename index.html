@@ -320,6 +320,10 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
           <button class="btn ghost danger" id="ed-remove">外す</button>
         </div>
         <div id="ed-facetools" class="sect" hidden>
+          <div class="seg" id="fc-fit">
+            <button data-v="keep" aria-pressed="true">Bの顔そのまま</button>
+            <button data-v="shape" aria-pressed="false">Aの表情に合わせる</button>
+          </div>
           <div class="seg" id="fc-mode">
             <button data-v="full" aria-pressed="true">顔全体</button>
             <button data-v="parts" aria-pressed="false">目・鼻・口だけ</button>
@@ -1534,20 +1538,29 @@ const FC = {
     const L=E.L, on = !!(L && L.type==='img' && L.fc); $('#ed-facetools').hidden = !on; if(!on) return;
     const p=L.fp;
     document.querySelectorAll('#fc-mode [data-v]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===p.mode));
+    document.querySelectorAll('#fc-fit [data-v]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===p.fit));
     for(const k of ['blend','edge','tex']){ $(`#fc-${k}`).value=p[k]; $(`#fc-${k}-o`).textContent=p[k]; }
     $('#fc-hair').checked = p.hair; $('#fc-hair').disabled = !L.fc.hair;
     $('#fc-pick').hidden = L.fc.faces.length<2;
   },
   later(){ clearTimeout(this.timer); this.timer = setTimeout(()=>{ const L=E.L; if(L && L.fc){ this.render(L); E.draw(); } }, 120); },
   render(L){
-    const {R, warp, aReg, hair, pa, fw} = L.fc, p = L.fp, W=R.w, H=R.h, N=W*H;
+    const fc = L.fc, {R, aReg, hair, fw} = fc, p = L.fp, W=R.w, H=R.h, N=W*H;
+    const keep = p.fit!=='shape';
+    if(!keep && !fc.mesh) fc.mesh = meshWarp(fc.B, fc.pbRaw, fc.pa, R);
+    const warp = keep ? fc.rigid : fc.mesh, pa = keep ? fc.pbT : fc.pa;   // outline to cut: B's own face when kept as-is
     // 1) area to replace
-    const poly = p.mode==='parts' ? (()=>{ const h=hull(PARTS.map(i=>pa[i])); return shrink(h, 1.12); })() : shrink(ovalOf(pa), 0.96);
+    const poly = p.mode==='parts' ? (()=>{ const h=hull(PARTS.map(i=>pa[i])); return shrink(h, 1.12); })() : shrink(ovalOf(pa), 0.97);
     const mc=document.createElement('canvas'); mc.width=W; mc.height=H; const mx=mc.getContext('2d'); mx.beginPath(); poly.forEach((q,i)=>i?mx.lineTo(q.x,q.y):mx.moveTo(q.x,q.y)); mx.closePath(); mx.fill();
+    if(keep && p.mode!=='parts'){ // stay inside A's face outline too, so A's background/hair never gets pulled in
+      mx.globalCompositeOperation='destination-in'; mx.beginPath(); shrink(ovalOf(fc.pa), 0.99).forEach((q,i)=>i?mx.lineTo(q.x,q.y):mx.moveTo(q.x,q.y)); mx.closePath(); mx.fill(); }
     const md=pix(mc).data, g=pix(warp).data, a=pix(aReg).data, M=new Uint8Array(N);
     for(let i=0;i<N;i++) M[i] = md[i*4+3]>127 && g[i*4+3]>200 && !(p.hair && hair && hair[i]>0.5) ? 1 : 0;
-    // 2) match sharpness / grain
-    const rad = Math.max(1.5, fw/110), gb=pix(blurCanvas(warp, rad)).data, ab=pix(blurCanvas(aReg, rad)).data;
+    // 2) match sharpness / grain (blur only inside the face so the background never bleeds in)
+    const hm = document.createElement('canvas'); hm.width=W; hm.height=H; const hd = hm.getContext('2d').createImageData(W,H);
+    for(let i=0;i<N;i++) hd.data[i*4+3] = M[i]*255; hm.getContext('2d').putImageData(hd,0,0);
+    const inside = c => { const o=document.createElement('canvas'); o.width=W; o.height=H; const x=o.getContext('2d'); x.drawImage(c,0,0); x.globalCompositeOperation='destination-in'; x.drawImage(hm,0,0); return o; };
+    const rad = Math.max(1.5, fw/110), gb=pix(blurCanvas(inside(warp), rad)).data, ab=pix(blurCanvas(inside(aReg), rad)).data;
     let sg=0, sa=0, n=0;
     for(let i=0;i<N;i++){ if(!M[i]) continue; const j=i*4; const lg=(g[j]-gb[j])*.3+(g[j+1]-gb[j+1])*.59+(g[j+2]-gb[j+2])*.11, la=(a[j]-ab[j])*.3+(a[j+1]-ab[j+1])*.59+(a[j+2]-ab[j+2])*.11; sg+=lg*lg; sa+=la*la; n++; }
     const ratio = n ? clamp(Math.sqrt(sa/Math.max(1,sg)), 0.3, 1.8) : 1, k = 1 + (ratio-1)*p.tex/100;
@@ -1559,8 +1572,6 @@ const FC = {
       if(x===0||y===0||x===W-1||y===H-1||!M[i-1]||!M[i+1]||!M[i-W]||!M[i+W]){ wt[i]=1; for(let c=0;c<3;c++) val[i*3+c]=a[i*4+c]-f[i*3+c]; } }
     const mem = membrane(val, wt, W, H), st = p.blend/100;
     // 4) soft edge, kept inside the replaced area
-    const hm = document.createElement('canvas'); hm.width=W; hm.height=H; const hd = hm.getContext('2d').createImageData(W,H);
-    for(let i=0;i<N;i++) hd.data[i*4+3] = M[i]*255; hm.getContext('2d').putImageData(hd,0,0);
     const er = 1 + fw*0.10*p.edge/100, soft = pix(blurCanvas(hm, er)).data;
     const out = new Uint8ClampedArray(N*4);
     for(let i=0;i<N;i++){ if(!M[i]) continue; const al = clamp((soft[i*4+3]/255-0.5)*2.2+0.05, 0, 1);
@@ -1569,10 +1580,23 @@ const FC = {
     L.src = toCanvas(out, W, H); L.orig = L.src; L._t = null;
   },
 };
+document.querySelectorAll('#fc-fit [data-v]').forEach(b => b.onclick = () => { const L=E.L; if(!L||!L.fp) return; L.fp.fit=b.dataset.v; FC.sync(); busy(true,'合わせ直しています…'); setTimeout(()=>{ try { FC.render(L); E.draw(); } finally { busy(false); } }, 30); });
 document.querySelectorAll('#fc-mode [data-v]').forEach(b => b.onclick = () => { const L=E.L; if(!L||!L.fp) return; L.fp.mode=b.dataset.v; FC.sync(); FC.later(); });
 for(const k of ['blend','edge','tex']) $(`#fc-${k}`).oninput = e => { const L=E.L; if(!L||!L.fp) return; L.fp[k]=+e.target.value; $(`#fc-${k}-o`).textContent=e.target.value; FC.later(); };
 $('#fc-hair').onchange = e => { const L=E.L; if(!L||!L.fp) return; L.fp.hair=e.target.checked; FC.later(); };
 $('#fc-pick').onclick = () => faceCompose(true);
+function meshWarp(B, pb, paR, R){ // reshape B's face to A's landmarks (follows A's expression)
+  const warp = document.createElement('canvas'); warp.width=R.w; warp.height=R.h; const wx = warp.getContext('2d');
+  for(const [i,j,k] of delaunay(paR)){
+    const d = [paR[i],paR[j],paR[k]], sp = [pb[i],pb[j],pb[k]];
+    const c = {x:(d[0].x+d[1].x+d[2].x)/3, y:(d[0].y+d[1].y+d[2].y)/3};
+    const gr = d.map(p=>{ const vx=p.x-c.x, vy=p.y-c.y, l=Math.hypot(vx,vy)||1; return {x:p.x+vx/l*0.9, y:p.y+vy/l*0.9}; });
+    const m = solveAffine(sp[0],sp[1],sp[2], d[0],d[1],d[2]); if(!m) continue;
+    wx.save(); wx.beginPath(); wx.moveTo(gr[0].x,gr[0].y); wx.lineTo(gr[1].x,gr[1].y); wx.lineTo(gr[2].x,gr[2].y); wx.closePath(); wx.clip();
+    wx.setTransform(m[0],m[1],m[2],m[3],m[4],m[5]); wx.drawImage(B,0,0); wx.restore();
+  }
+  return warp;
+}
 function chooseFace(A, faces){
   return new Promise(res => sheet((el, close) => {
     const crops = faces.map(P => { const b=boxOf(ovalOf(P)), m=b.w*0.25, c=document.createElement('canvas'); c.width=c.height=120;
@@ -1595,20 +1619,20 @@ async function faceCompose(repick){
     const pb = fb.slice().sort((p,q)=>area(q)-area(p))[0];
     let pa = fa[0];
     if(fa.length>1){ busy(false); const i = await chooseFace(A, fa); if(i==null) return; pa = fa[i]; }
-    busy(true, '顔の形を合わせています…'); await new Promise(r=>setTimeout(r,30));
-    const ob = boxOf(ovalOf(pa)), mx = ob.w*0.12, my = ob.h*0.12;
-    const R = {x:Math.max(0,Math.floor(ob.x-mx)), y:Math.max(0,Math.floor(ob.y-my))};
-    R.w = Math.min(A.width, Math.ceil(ob.x+ob.w+mx)) - R.x; R.h = Math.min(A.height, Math.ceil(ob.y+ob.h+my)) - R.y;
-    // warp B's face onto A's face shape, triangle by triangle
-    const warp = document.createElement('canvas'); warp.width=R.w; warp.height=R.h; const wx = warp.getContext('2d');
-    for(const [i,j,k] of delaunay(pa)){
-      const d = [pa[i],pa[j],pa[k]].map(p=>({x:p.x-R.x, y:p.y-R.y})), sp = [pb[i],pb[j],pb[k]];
-      const c = {x:(d[0].x+d[1].x+d[2].x)/3, y:(d[0].y+d[1].y+d[2].y)/3};
-      const gr = d.map(p=>{ const vx=p.x-c.x, vy=p.y-c.y, l=Math.hypot(vx,vy)||1; return {x:p.x+vx/l*0.9, y:p.y+vy/l*0.9}; });
-      const m = solveAffine(sp[0],sp[1],sp[2], d[0],d[1],d[2]); if(!m) continue;
-      wx.save(); wx.beginPath(); wx.moveTo(gr[0].x,gr[0].y); wx.lineTo(gr[1].x,gr[1].y); wx.lineTo(gr[2].x,gr[2].y); wx.closePath(); wx.clip();
-      wx.setTransform(m[0],m[1],m[2],m[3],m[4],m[5]); wx.drawImage(B,0,0); wx.restore();
-    }
+    busy(true, '顔の位置を合わせています…'); await new Promise(r=>setTimeout(r,30));
+    // best fit of B's face onto A's face using only stable points (eyes, nose, temples, forehead) so B keeps its own expression
+    const STABLE = [33,133,362,263,168,6,197,4,1,234,454,127,356,10,9,151];
+    const sim = (() => { const n=STABLE.length; let ax=0,ay=0,bx=0,by=0; for(const i of STABLE){ ax+=pa[i].x; ay+=pa[i].y; bx+=pb[i].x; by+=pb[i].y; } ax/=n; ay/=n; bx/=n; by/=n;
+      let sxx=0, sxy=0, sbb=0; for(const i of STABLE){ const ux=pb[i].x-bx, uy=pb[i].y-by, vx=pa[i].x-ax, vy=pa[i].y-ay; sxx+=ux*vx+uy*vy; sxy+=ux*vy-uy*vx; sbb+=ux*ux+uy*uy; }
+      const r=Math.atan2(sxy, sxx), sc=Math.hypot(sxx, sxy)/(sbb||1), c=Math.cos(r)*sc, sn=Math.sin(r)*sc;
+      return {a:c, b:sn, c:-sn, d:c, e:ax-(c*bx-sn*by), f:ay-(sn*bx+c*by)}; })();
+    const T = p => ({x: sim.a*p.x + sim.c*p.y + sim.e, y: sim.b*p.x + sim.d*p.y + sim.f});
+    const pbA = pb.map(T);
+    const bo = boxOf(ovalOf(pbA).concat(ovalOf(pa))), ob = boxOf(ovalOf(pa)), mx = bo.w*0.12, my = bo.h*0.12;
+    const R = {x:Math.max(0,Math.floor(bo.x-mx)), y:Math.max(0,Math.floor(bo.y-my))};
+    R.w = Math.min(A.width, Math.ceil(bo.x+bo.w+mx)) - R.x; R.h = Math.min(A.height, Math.ceil(bo.y+bo.h+my)) - R.y;
+    const rigid = document.createElement('canvas'); rigid.width=R.w; rigid.height=R.h;
+    const rx = rigid.getContext('2d'); rx.imageSmoothingQuality='high'; rx.setTransform(sim.a, sim.b, sim.c, sim.d, sim.e-R.x, sim.f-R.y); rx.drawImage(B, 0, 0);
     const aReg = document.createElement('canvas'); aReg.width=R.w; aReg.height=R.h; aReg.getContext('2d').drawImage(A, R.x, R.y, R.w, R.h, 0, 0, R.w, R.h);
     // find A's hair so it can stay on top
     let hair = null;
@@ -1621,9 +1645,9 @@ async function faceCompose(repick){
         for(let y=0;y<R.h;y++) for(let x=0;x<R.w;x++){ const sx2=Math.min(conf.w-1, Math.floor(x/R.w*conf.w)), sy2=Math.min(conf.h-1, Math.floor(y/R.h*conf.h)); hair[y*R.w+x]=conf.d[sy2*conf.w+sx2]; } }
     } catch { hair = null; }
     busy(true, '境目をなじませています…'); await new Promise(r=>setTimeout(r,30));
-    const paR = pa.map(p=>({x:p.x-R.x, y:p.y-R.y}));
-    L.fc = {R, warp, aReg, hair, pa:paR, fw:ob.w, faces:fa};
-    L.fp = L.fp || {mode:'full', blend:90, edge:35, tex:70, hair:true};
+    const paR = pa.map(p=>({x:p.x-R.x, y:p.y-R.y})), pbT = pbA.map(p=>({x:p.x-R.x, y:p.y-R.y}));
+    L.fc = {R, rigid, mesh:null, B, pbRaw:pb, aReg, hair, pa:paR, pbT, fw:ob.w, faces:fa};
+    L.fp = Object.assign({mode:'full', blend:90, edge:35, tex:70, hair:true}, L.fp||{}, {fit: (L.fp && L.fp.fit) || 'keep'});
     FC.render(L);
     Object.assign(L, {bsrc:B, s:1, r:0, o:1, flip:false, face:true, x:R.x+R.w/2, y:R.y+R.h/2});
     E.refresh(); E.draw(); busy(false);
