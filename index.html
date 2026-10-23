@@ -315,6 +315,7 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
         <div class="row">
           <button class="btn primary" id="ed-cut">切り抜き</button>
           <button class="btn primary" id="ed-face">顔を合わせる</button>
+          <button class="btn" id="ed-flip">左右反転</button>
           <button class="btn" id="ed-front">前面へ</button>
           <button class="btn ghost danger" id="ed-remove">外す</button>
         </div>
@@ -323,6 +324,7 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
         <label class="slider" for="ed-o">不透明度<input type="range" id="ed-o" min="10" max="100" value="100"><output id="ed-o-o">100%</output></label>
         <p class="hint" id="ed-tip">写真の上で指1本で移動、2本でサイズと角度を変えられます。</p>
       </div>
+      <div id="ed-base-tools" class="row" hidden><button class="btn" id="ed-flip-base">写真Aを左右反転</button></div>
       <div id="ed-draw" class="sect" hidden>
         <div class="seg" id="dr-mode">
           <button data-m="pen" aria-pressed="true">ペン</button>
@@ -1103,7 +1105,7 @@ const E = {
   },
   composite(ctx, upto=Infinity){
     ctx.drawImage(this.base, 0, 0);
-    for(const L of this.layers.slice(0, upto)){ ctx.save(); ctx.globalAlpha=L.o; ctx.translate(L.x,L.y); ctx.rotate(L.r); ctx.scale(L.s,L.s); ctx.drawImage(L.src,-L.src.width/2,-L.src.height/2); ctx.restore(); }
+    for(const L of this.layers.slice(0, upto)){ ctx.save(); ctx.globalAlpha=L.o; ctx.translate(L.x,L.y); ctx.rotate(L.r); ctx.scale(L.flip?-L.s:L.s, L.s); ctx.drawImage(L.src,-L.src.width/2,-L.src.height/2); ctx.restore(); }
   },
   draw(){
     const cv=$('#ed-cv'), ctx=cv.getContext('2d'), dpr=window.devicePixelRatio||1;
@@ -1135,7 +1137,7 @@ const E = {
       .concat(['add:＋ 写真B','text:＋ テキスト','stamp:＋ スタンプ','draw:＋ 手書き'].map(x=>{ const [k,t]=x.split(':'); return `<button class="layer-chip add" data-l="${k}">${t}</button>`; }));
     $('#ed-layers').innerHTML = chips.join('');
     const L = this.L, isDraw = !!L && L.type==='draw';
-    $('#ed-tools').hidden = !L || isDraw; $('#ed-draw').hidden = !isDraw; $('#ed-hint-b').hidden = !!this.layers.length;
+    $('#ed-tools').hidden = !L || isDraw; $('#ed-draw').hidden = !isDraw; $('#ed-base-tools').hidden = !!L; $('#ed-hint-b').hidden = !!this.layers.length;
     if(L && !isDraw){
       $('#ed-cut').hidden = L.type==='stamp'; $('#ed-cut').textContent = L.type==='text' ? 'テキストを編集' : '切り抜き';
       $('#ed-face').hidden = L.type!=='img';
@@ -1176,6 +1178,11 @@ $('#ed-r').oninput = e => { const L=E.L; if(!L) return; L.r = +e.target.value*Ma
 $('#ed-o').oninput = e => { const L=E.L; if(!L) return; L.o = +e.target.value/100; E.syncSliders(); E.draw(); };
 $('#ed-front').onclick = () => { const L=E.L; if(!L) return; E.layers.splice(E.active,1); E.layers.push(L); E.active=E.layers.length-1; E.refresh(); E.draw(); };
 $('#ed-face').onclick = () => faceCompose();
+$('#ed-flip').onclick = () => { const L=E.L; if(!L || L.type==='draw') return; L.flip = !L.flip; E.draw(); };
+$('#ed-flip-base').onclick = () => {
+  if(!E.base) return; const b=E.base, c=document.createElement('canvas'); c.width=b.width; c.height=b.height;
+  const x=c.getContext('2d'); x.translate(c.width,0); x.scale(-1,1); x.drawImage(b,0,0); E.base=c; E._baseT=null; E.refresh(); E.draw();
+};
 $('#ed-remove').onclick = () => { if(!E.L) return; E.layers.splice(E.active,1); E.active=E.layers.length-1; E.refresh(); E.draw(); };
 $('#ed-cut').onclick = async () => {
   const L = E.L; if(!L) return;
@@ -1302,7 +1309,7 @@ async function b64Canvas(str, type){
 async function serializeProject(){
   const p = {v:1, base: await canvasB64(E.base,'image/jpeg',.95), layers:[]};
   for(const L of E.layers){
-    const o = {type:L.type, x:L.x, y:L.y, s:L.s, r:L.r, o:L.o};
+    const o = {type:L.type, x:L.x, y:L.y, s:L.s, r:L.r, o:L.o, flip:!!L.flip};
     if(L.type==='text') Object.assign(o, {text:L.text, font:L.font, color:L.color, style:L.style});
     else if(L.type==='stamp') o.ch = L.ch;
     else if(L.type==='draw') o.src = await canvasB64(L.src,'image/png');
@@ -1470,7 +1477,7 @@ async function faceCompose(){
     ox.globalCompositeOperation = 'destination-in'; ox.imageSmoothingEnabled = true; ox.drawImage(sm, 0, 0, W, H);
     // place B's eyes on A's eyes
     const v = {x:eb.m.x-W/2, y:eb.m.y-H/2};
-    Object.assign(L, {src:out, s, r, o:1, face:true, _t:null,
+    Object.assign(L, {src:out, s, r, o:1, face:true, flip:false, _t:null,
       x: ea.m.x - (Math.cos(r)*v.x - Math.sin(r)*v.y)*s, y: ea.m.y - (Math.sin(r)*v.x + Math.cos(r)*v.y)*s});
     E.refresh(); E.draw(); busy(false);
     toast(fa.length>1 ? '顔を合わせました。別の顔に合わせたいときは、写真Bをその顔の近くに置いてからもう一度押してください' : '顔を合わせました。指で位置や大きさを微調整できます');
