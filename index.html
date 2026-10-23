@@ -319,6 +319,17 @@ textarea.field{resize:vertical;min-height:84px;line-height:1.5}
           <button class="btn" id="ed-front">前面へ</button>
           <button class="btn ghost danger" id="ed-remove">外す</button>
         </div>
+        <div id="ed-facetools" class="sect" hidden>
+          <div class="seg" id="fc-mode">
+            <button data-v="full" aria-pressed="true">顔全体</button>
+            <button data-v="parts" aria-pressed="false">目・鼻・口だけ</button>
+          </div>
+          <label class="slider" for="fc-blend">なじませ<input type="range" id="fc-blend" min="0" max="100" value="90"><output id="fc-blend-o">90</output></label>
+          <label class="slider" for="fc-edge">境目の幅<input type="range" id="fc-edge" min="0" max="100" value="35"><output id="fc-edge-o">35</output></label>
+          <label class="slider" for="fc-tex">質感合わせ<input type="range" id="fc-tex" min="0" max="100" value="70"><output id="fc-tex-o">70</output></label>
+          <label class="check"><input type="checkbox" id="fc-hair" checked>写真Aの前髪・髪の毛を上に残す</label>
+          <button class="btn" id="fc-pick" hidden>合わせる顔を選び直す</button>
+        </div>
         <label class="slider" for="ed-s">大きさ<input type="range" id="ed-s" min="5" max="300" value="50"><output id="ed-s-o">50%</output></label>
         <label class="slider" for="ed-r">回転<input type="range" id="ed-r" min="-180" max="180" value="0"><output id="ed-r-o">0°</output></label>
         <label class="slider" for="ed-o">不透明度<input type="range" id="ed-o" min="10" max="100" value="100"><output id="ed-o-o">100%</output></label>
@@ -1141,6 +1152,7 @@ const E = {
     if(L && !isDraw){
       $('#ed-cut').hidden = L.type==='stamp'; $('#ed-cut').textContent = L.type==='text' ? 'テキストを編集' : '切り抜き';
       $('#ed-face').hidden = L.type!=='img';
+      FC.sync();
     }
     if(isDraw) D.sync();
     this.syncSliders();
@@ -1177,7 +1189,7 @@ $('#ed-s').oninput = e => { const L=E.L; if(!L) return; L.s = (+e.target.value/1
 $('#ed-r').oninput = e => { const L=E.L; if(!L) return; L.r = +e.target.value*Math.PI/180; E.syncSliders(); E.draw(); };
 $('#ed-o').oninput = e => { const L=E.L; if(!L) return; L.o = +e.target.value/100; E.syncSliders(); E.draw(); };
 $('#ed-front').onclick = () => { const L=E.L; if(!L) return; E.layers.splice(E.active,1); E.layers.push(L); E.active=E.layers.length-1; E.refresh(); E.draw(); };
-$('#ed-face').onclick = () => faceCompose();
+$('#ed-face').onclick = () => faceCompose(false);
 $('#ed-flip').onclick = () => { const L=E.L; if(!L || L.type==='draw') return; L.flip = !L.flip; E.draw(); };
 $('#ed-flip-base').onclick = () => {
   if(!E.base) return; const b=E.base, c=document.createElement('canvas'); c.width=b.width; c.height=b.height;
@@ -1413,6 +1425,10 @@ const AI = {
     if(!this.seg){ const m = await this.lib(); this.seg = await this.make(m.InteractiveSegmenter, {baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/interactive_segmenter/magic_touch/float32/1/magic_touch.tflite'}, outputCategoryMask:false, outputConfidenceMasks:true}); }
     return this.seg;
   },
+  async parser(){
+    if(!this.hair){ const m = await this.lib(); this.hair = await this.make(m.ImageSegmenter, {baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite'}, runningMode:'IMAGE', outputCategoryMask:false, outputConfidenceMasks:true}); }
+    return this.hair;
+  },
   async faces(){
     if(!this.face){ const m = await this.lib(); this.face = await this.make(m.FaceLandmarker, {baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'}, runningMode:'IMAGE', numFaces:6}); }
     return this.face;
@@ -1477,7 +1493,96 @@ function shrinkTo(c, w, h){ // area-averaging downscale by repeated halving
   let cur=c; while(cur.width/2>w*1.2 && cur.height/2>h*1.2){ const n=document.createElement('canvas'); n.width=Math.ceil(cur.width/2); n.height=Math.ceil(cur.height/2); n.getContext('2d').drawImage(cur,0,0,n.width,n.height); cur=n; }
   const o=document.createElement('canvas'); o.width=w; o.height=h; o.getContext('2d').drawImage(cur,0,0,w,h); return o;
 }
-async function faceCompose(){
+const PARTS = [70,63,105,66,107,55,65,52,53,46, 336,296,334,293,300,276,283,282,295,285,
+  33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246, 362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398,
+  168,6,197,195,5,4,1,19,94,2,98,327,129,358, 61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185];
+function hull(pts){ const p=pts.slice().sort((a,b)=>a.x-b.x||a.y-b.y), cr=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x), lo=[], up=[];
+  for(const q of p){ while(lo.length>=2 && cr(lo[lo.length-2],lo[lo.length-1],q)<=0) lo.pop(); lo.push(q); }
+  for(const q of p.reverse()){ while(up.length>=2 && cr(up[up.length-2],up[up.length-1],q)<=0) up.pop(); up.push(q); }
+  return lo.slice(0,-1).concat(up.slice(0,-1)); }
+function blurCanvas(c, r){ // fast approximate blur: shrink then enlarge
+  const k = Math.max(1, r), w = Math.max(1, Math.round(c.width/k)), h = Math.max(1, Math.round(c.height/k));
+  const sm = shrinkTo(c, w, h), o = document.createElement('canvas'); o.width=c.width; o.height=c.height;
+  const x = o.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(sm, 0, 0, c.width, c.height); return o;
+}
+const pix = c => c.getContext('2d', {willReadFrequently:true}).getImageData(0,0,c.width,c.height);
+function toCanvas(data, w, h){ const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').putImageData(new ImageData(data, w, h), 0, 0); return c; }
+// harmonic "membrane" from boundary values (push-pull pyramid) = the colour correction of seamless cloning
+function membrane(val, wt, w, h){
+  const levels=[{v:val, w:wt, W:w, H:h}];
+  while(levels[levels.length-1].W>2 && levels[levels.length-1].H>2){
+    const L=levels[levels.length-1], W2=Math.ceil(L.W/2), H2=Math.ceil(L.H/2), v=new Float32Array(W2*H2*3), ww=new Float32Array(W2*H2);
+    for(let y=0;y<L.H;y++) for(let x=0;x<L.W;x++){ const i=y*L.W+x, q=wt2(L,i); if(!q) continue; const j=(y>>1)*W2+(x>>1); ww[j]+=q; for(let c=0;c<3;c++) v[j*3+c]+=L.v[i*3+c]*q; }
+    for(let j=0;j<W2*H2;j++){ if(ww[j]>0){ for(let c=0;c<3;c++) v[j*3+c]/=ww[j]; ww[j]=Math.min(1,ww[j]); } }
+    levels.push({v, w:ww, W:W2, H:H2});
+  }
+  function wt2(L,i){ return L.w[i]; }
+  for(let l=levels.length-2;l>=0;l--){
+    const F=levels[l], Cs=levels[l+1];
+    for(let y=0;y<F.H;y++) for(let x=0;x<F.W;x++){ const i=y*F.W+x, q=F.w[i]; if(q>=1) continue;
+      const fx=clamp((x+0.5)/2-0.5,0,Cs.W-1), fy=clamp((y+0.5)/2-0.5,0,Cs.H-1), x0=Math.floor(fx), y0=Math.floor(fy), x1=Math.min(Cs.W-1,x0+1), y1=Math.min(Cs.H-1,y0+1), tx=fx-x0, ty=fy-y0;
+      for(let c=0;c<3;c++){ const cv=(Cs.v[(y0*Cs.W+x0)*3+c]*(1-tx)+Cs.v[(y0*Cs.W+x1)*3+c]*tx)*(1-ty)+(Cs.v[(y1*Cs.W+x0)*3+c]*(1-tx)+Cs.v[(y1*Cs.W+x1)*3+c]*tx)*ty;
+        F.v[i*3+c] = q*F.v[i*3+c] + (1-q)*cv; }
+      F.w[i]=1; }
+  }
+  return levels[0].v;
+}
+/* Face compositing: analyse once (AI), then re-render quickly whenever a slider moves */
+const FC = {
+  timer:null,
+  sync(){
+    const L=E.L, on = !!(L && L.type==='img' && L.fc); $('#ed-facetools').hidden = !on; if(!on) return;
+    const p=L.fp;
+    document.querySelectorAll('#fc-mode [data-v]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===p.mode));
+    for(const k of ['blend','edge','tex']){ $(`#fc-${k}`).value=p[k]; $(`#fc-${k}-o`).textContent=p[k]; }
+    $('#fc-hair').checked = p.hair; $('#fc-hair').disabled = !L.fc.hair;
+    $('#fc-pick').hidden = L.fc.faces.length<2;
+  },
+  later(){ clearTimeout(this.timer); this.timer = setTimeout(()=>{ const L=E.L; if(L && L.fc){ this.render(L); E.draw(); } }, 120); },
+  render(L){
+    const {R, warp, aReg, hair, pa, fw} = L.fc, p = L.fp, W=R.w, H=R.h, N=W*H;
+    // 1) area to replace
+    const poly = p.mode==='parts' ? (()=>{ const h=hull(PARTS.map(i=>pa[i])); return shrink(h, 1.12); })() : shrink(ovalOf(pa), 0.96);
+    const mc=document.createElement('canvas'); mc.width=W; mc.height=H; const mx=mc.getContext('2d'); mx.beginPath(); poly.forEach((q,i)=>i?mx.lineTo(q.x,q.y):mx.moveTo(q.x,q.y)); mx.closePath(); mx.fill();
+    const md=pix(mc).data, g=pix(warp).data, a=pix(aReg).data, M=new Uint8Array(N);
+    for(let i=0;i<N;i++) M[i] = md[i*4+3]>127 && g[i*4+3]>200 && !(p.hair && hair && hair[i]>0.5) ? 1 : 0;
+    // 2) match sharpness / grain
+    const rad = Math.max(1.5, fw/110), gb=pix(blurCanvas(warp, rad)).data, ab=pix(blurCanvas(aReg, rad)).data;
+    let sg=0, sa=0, n=0;
+    for(let i=0;i<N;i++){ if(!M[i]) continue; const j=i*4; const lg=(g[j]-gb[j])*.3+(g[j+1]-gb[j+1])*.59+(g[j+2]-gb[j+2])*.11, la=(a[j]-ab[j])*.3+(a[j+1]-ab[j+1])*.59+(a[j+2]-ab[j+2])*.11; sg+=lg*lg; sa+=la*la; n++; }
+    const ratio = n ? clamp(Math.sqrt(sa/Math.max(1,sg)), 0.3, 1.8) : 1, k = 1 + (ratio-1)*p.tex/100;
+    const f = new Float32Array(N*3);
+    for(let i=0;i<N;i++) for(let c=0;c<3;c++){ const j=i*4+c; f[i*3+c] = gb[j] + k*(g[j]-gb[j]); }
+    // 3) seamless blend: spread the colour difference found on the outline smoothly across the face
+    const val=new Float32Array(N*3), wt=new Float32Array(N);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const i=y*W+x; if(!M[i]) continue;
+      if(x===0||y===0||x===W-1||y===H-1||!M[i-1]||!M[i+1]||!M[i-W]||!M[i+W]){ wt[i]=1; for(let c=0;c<3;c++) val[i*3+c]=a[i*4+c]-f[i*3+c]; } }
+    const mem = membrane(val, wt, W, H), st = p.blend/100;
+    // 4) soft edge, kept inside the replaced area
+    const hm = document.createElement('canvas'); hm.width=W; hm.height=H; const hd = hm.getContext('2d').createImageData(W,H);
+    for(let i=0;i<N;i++) hd.data[i*4+3] = M[i]*255; hm.getContext('2d').putImageData(hd,0,0);
+    const er = 1 + fw*0.10*p.edge/100, soft = pix(blurCanvas(hm, er)).data;
+    const out = new Uint8ClampedArray(N*4);
+    for(let i=0;i<N;i++){ if(!M[i]) continue; const al = clamp((soft[i*4+3]/255-0.5)*2.2+0.05, 0, 1);
+      for(let c=0;c<3;c++) out[i*4+c] = f[i*3+c] + mem[i*3+c]*st;
+      out[i*4+3] = Math.round(al*255); }
+    L.src = toCanvas(out, W, H); L.orig = L.src; L._t = null;
+  },
+};
+document.querySelectorAll('#fc-mode [data-v]').forEach(b => b.onclick = () => { const L=E.L; if(!L||!L.fp) return; L.fp.mode=b.dataset.v; FC.sync(); FC.later(); });
+for(const k of ['blend','edge','tex']) $(`#fc-${k}`).oninput = e => { const L=E.L; if(!L||!L.fp) return; L.fp[k]=+e.target.value; $(`#fc-${k}-o`).textContent=e.target.value; FC.later(); };
+$('#fc-hair').onchange = e => { const L=E.L; if(!L||!L.fp) return; L.fp.hair=e.target.checked; FC.later(); };
+$('#fc-pick').onclick = () => faceCompose(true);
+function chooseFace(A, faces){
+  return new Promise(res => sheet((el, close) => {
+    const crops = faces.map(P => { const b=boxOf(ovalOf(P)), m=b.w*0.25, c=document.createElement('canvas'); c.width=c.height=120;
+      c.getContext('2d').drawImage(A, b.x-m, b.y-m, b.w+m*2, b.h+m*2, 0, 0, 120, 120); return c.toDataURL('image/jpeg',.8); });
+    el.innerHTML = `<h2>どの顔に合わせますか？</h2><div class="pick-grid">${crops.map((u,i)=>`<button class="th" data-i="${i}"><img src="${u}" alt="顔${i+1}"></button>`).join('')}</div><button class="btn ghost wide" data-x>やめる</button>`;
+    el.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { close(); res(+b.dataset.i); });
+    el.querySelector('[data-x]').onclick = () => { close(); res(null); };
+  }, () => res(null)));
+}
+async function faceCompose(repick){
   const L = E.L; if(!L || L.type!=='img') return;
   busy(true, '顔を探しています…（初回はAIの準備に少し時間がかかります）');
   try {
@@ -1488,56 +1593,41 @@ async function faceCompose(){
     if(!fb.length) throw new Error('写真Bに顔が見つかりませんでした');
     const area = P => { const b = boxOf(ovalOf(P)); return b.w*b.h; };
     const pb = fb.slice().sort((p,q)=>area(q)-area(p))[0];
-    // which face in A: the one nearest to where photo B currently sits
-    const here = {x:L.x, y:L.y}, dd = P => { const m=eyesOf(P).m; return Math.hypot(m.x-here.x, m.y-here.y); };
-    const pa = fa.slice().sort((p,q)=>dd(p)-dd(q))[0];
-    busy(true, '顔の形を合わせています…');
-    await new Promise(r=>setTimeout(r,30));
-    // working region on A around the target face
+    let pa = fa[0];
+    if(fa.length>1){ busy(false); const i = await chooseFace(A, fa); if(i==null) return; pa = fa[i]; }
+    busy(true, '顔の形を合わせています…'); await new Promise(r=>setTimeout(r,30));
     const ob = boxOf(ovalOf(pa)), mx = ob.w*0.12, my = ob.h*0.12;
     const R = {x:Math.max(0,Math.floor(ob.x-mx)), y:Math.max(0,Math.floor(ob.y-my))};
     R.w = Math.min(A.width, Math.ceil(ob.x+ob.w+mx)) - R.x; R.h = Math.min(A.height, Math.ceil(ob.y+ob.h+my)) - R.y;
-    // 1) warp B's face onto A's face shape, triangle by triangle
+    // warp B's face onto A's face shape, triangle by triangle
     const warp = document.createElement('canvas'); warp.width=R.w; warp.height=R.h; const wx = warp.getContext('2d');
-    const tris = delaunay(pa);
-    for(const [i,j,k] of tris){
+    for(const [i,j,k] of delaunay(pa)){
       const d = [pa[i],pa[j],pa[k]].map(p=>({x:p.x-R.x, y:p.y-R.y})), sp = [pb[i],pb[j],pb[k]];
       const c = {x:(d[0].x+d[1].x+d[2].x)/3, y:(d[0].y+d[1].y+d[2].y)/3};
-      const g = d.map(p=>{ const vx=p.x-c.x, vy=p.y-c.y, l=Math.hypot(vx,vy)||1; return {x:p.x+vx/l*0.9, y:p.y+vy/l*0.9}; }); // grow a hair to hide seams
+      const gr = d.map(p=>{ const vx=p.x-c.x, vy=p.y-c.y, l=Math.hypot(vx,vy)||1; return {x:p.x+vx/l*0.9, y:p.y+vy/l*0.9}; });
       const m = solveAffine(sp[0],sp[1],sp[2], d[0],d[1],d[2]); if(!m) continue;
-      wx.save(); wx.beginPath(); wx.moveTo(g[0].x,g[0].y); wx.lineTo(g[1].x,g[1].y); wx.lineTo(g[2].x,g[2].y); wx.closePath(); wx.clip();
+      wx.save(); wx.beginPath(); wx.moveTo(gr[0].x,gr[0].y); wx.lineTo(gr[1].x,gr[1].y); wx.lineTo(gr[2].x,gr[2].y); wx.closePath(); wx.clip();
       wx.setTransform(m[0],m[1],m[2],m[3],m[4],m[5]); wx.drawImage(B,0,0); wx.restore();
     }
-    // 2) soft mask = A's face outline, feathered
-    const ovA = shrink(ovalOf(pa), 0.95).map(p=>({x:p.x-R.x, y:p.y-R.y})), feather = Math.max(3, ob.w*0.07);
-    const sm = document.createElement('canvas'); sm.width=Math.max(2,Math.round(R.w/feather)); sm.height=Math.max(2,Math.round(R.h/feather));
-    const sx = sm.getContext('2d'); sx.scale(sm.width/R.w, sm.height/R.h); sx.beginPath(); shrink(ovA,0.96).forEach((p,i)=> i?sx.lineTo(p.x,p.y):sx.moveTo(p.x,p.y)); sx.closePath(); sx.fill();
-    const mask = document.createElement('canvas'); mask.width=R.w; mask.height=R.h; const mkx=mask.getContext('2d'); mkx.imageSmoothingEnabled=true; mkx.drawImage(sm,0,0,R.w,R.h);
-    wx.save(); wx.globalCompositeOperation='destination-in'; wx.drawImage(mask,0,0); wx.restore();
-    // 3) carry over A's lighting and skin tone (low-frequency difference, like seamless cloning)
-    const aReg = document.createElement('canvas'); aReg.width=R.w; aReg.height=R.h; const ax=aReg.getContext('2d');
-    ax.drawImage(A, R.x, R.y, R.w, R.h, 0, 0, R.w, R.h); ax.globalCompositeOperation='destination-in'; ax.drawImage(mask,0,0);
-    const cell = Math.max(6, ob.w/16), gw = Math.max(2, Math.round(R.w/cell)), gh = Math.max(2, Math.round(R.h/cell));
-    const sA = shrinkTo(aReg, gw, gh).getContext('2d').getImageData(0,0,gw,gh).data, sW = shrinkTo(warp, gw, gh).getContext('2d').getImageData(0,0,gw,gh).data;
-    let diff = new Float32Array(gw*gh*3), ok = new Uint8Array(gw*gh);
-    for(let q=0;q<gw*gh;q++){ if(sA[q*4+3]>40 && sW[q*4+3]>40){ ok[q]=1; for(let c=0;c<3;c++) diff[q*3+c]=sA[q*4+c]-sW[q*4+c]; } }
-    for(let pass=0; pass<4; pass++){ // spread values into empty cells so edges don't darken
-      const nd = diff.slice(), no = ok.slice();
-      for(let y=0;y<gh;y++) for(let x=0;x<gw;x++){ const q=y*gw+x; if(ok[q]) continue; let n=0, acc=[0,0,0];
-        for(const [ox2,oy2] of [[1,0],[-1,0],[0,1],[0,-1]]){ const X=x+ox2, Y=y+oy2; if(X<0||Y<0||X>=gw||Y>=gh) continue; const r=Y*gw+X; if(ok[r]){ n++; for(let c=0;c<3;c++) acc[c]+=diff[r*3+c]; } }
-        if(n){ no[q]=1; for(let c=0;c<3;c++) nd[q*3+c]=acc[c]/n; } }
-      diff = nd; ok = no; }
-    const img = wx.getImageData(0,0,R.w,R.h), px = img.data, strength = 0.9;
-    for(let y=0;y<R.h;y++){ const fy = clamp((y+0.5)/R.h*gh-0.5, 0, gh-1), y0=Math.floor(fy), y1=Math.min(gh-1,y0+1), ty=fy-y0;
-      for(let x=0;x<R.w;x++){ const i=(y*R.w+x)*4; if(!px[i+3]) continue;
-        const fx = clamp((x+0.5)/R.w*gw-0.5, 0, gw-1), x0=Math.floor(fx), x1=Math.min(gw-1,x0+1), tx=fx-x0;
-        for(let c=0;c<3;c++){ const v = (diff[(y0*gw+x0)*3+c]*(1-tx)+diff[(y0*gw+x1)*3+c]*tx)*(1-ty) + (diff[(y1*gw+x0)*3+c]*(1-tx)+diff[(y1*gw+x1)*3+c]*tx)*ty;
-          px[i+c] = clamp(Math.round(px[i+c] + v*strength), 0, 255); } } }
-    wx.putImageData(img, 0, 0);
-    // 4) the result becomes a face layer sitting exactly over A's face
-    Object.assign(L, {bsrc:B, src:warp, orig:warp, s:1, r:0, o:1, flip:false, face:true, _t:null, x:R.x+R.w/2, y:R.y+R.h/2});
+    const aReg = document.createElement('canvas'); aReg.width=R.w; aReg.height=R.h; aReg.getContext('2d').drawImage(A, R.x, R.y, R.w, R.h, 0, 0, R.w, R.h);
+    // find A's hair so it can stay on top
+    let hair = null;
+    try {
+      busy(true, '髪の毛を見分けています…');
+      const hp = await AI.parser(), inp = canvasFrom(aReg, 512); let conf = null;
+      const grab = r => { const m = r && r.confidenceMasks && r.confidenceMasks[1]; if(m) conf = {w:m.width, h:m.height, d:m.getAsFloat32Array().slice()}; };
+      const ret = hp.segment(inp, grab); if(!conf && ret) grab(ret);
+      if(conf){ hair = new Float32Array(R.w*R.h);
+        for(let y=0;y<R.h;y++) for(let x=0;x<R.w;x++){ const sx2=Math.min(conf.w-1, Math.floor(x/R.w*conf.w)), sy2=Math.min(conf.h-1, Math.floor(y/R.h*conf.h)); hair[y*R.w+x]=conf.d[sy2*conf.w+sx2]; } }
+    } catch { hair = null; }
+    busy(true, '境目をなじませています…'); await new Promise(r=>setTimeout(r,30));
+    const paR = pa.map(p=>({x:p.x-R.x, y:p.y-R.y}));
+    L.fc = {R, warp, aReg, hair, pa:paR, fw:ob.w, faces:fa};
+    L.fp = L.fp || {mode:'full', blend:90, edge:35, tex:70, hair:true};
+    FC.render(L);
+    Object.assign(L, {bsrc:B, s:1, r:0, o:1, flip:false, face:true, x:R.x+R.w/2, y:R.y+R.h/2});
     E.refresh(); E.draw(); busy(false);
-    toast(fa.length>1 ? '顔を合わせました。別の顔にしたいときは、写真Bをその顔の近くに置き直して、もう一度選んで押してください' : '顔を合わせました。不透明度や消しゴムで仕上げを調整できます');
+    toast(hair ? '顔を合わせました。下の調整で仕上げられます' : '顔を合わせました（髪の見分けは使えませんでした）');
   } catch(err){ showError('顔を合わせられませんでした', err); }
   busy(false);
 }
